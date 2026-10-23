@@ -13,6 +13,8 @@ from openai import OpenAI
 import config
 
 _client = None
+_fallback_in_use = False
+last_model_used = None  # which model answered the most recent call (written into every transcript line)
 
 # Venue wifi drops for longer than the SDK's own quick retries cover. These errors are transient,
 # so wait and try again instead of losing the whole investigation. Anything else (bad request,
@@ -27,6 +29,8 @@ TOKENS_PER_MINUTE = int(os.environ.get("LLM_TOKENS_PER_MINUTE", "8000"))
 TOKEN_BUDGET = int(TOKENS_PER_MINUTE * 0.9)  # headroom for our estimate being a little off
 MAX_COMPLETION_TOKENS = 2048                 # bounds the reply (reasoning + answer) so a request's size is predictable
 _recent_usage = []                           # [(time.time(), tokens used)] within the last 60 s
+_recent_completions = []                     # completion sizes actually observed, to reserve realistically
+last_usage = None                            # {"prompt_tokens", "completion_tokens", "total_tokens"} of the last call
 
 
 def get_client():
@@ -41,9 +45,37 @@ def get_client():
     return _client
 
 
+def _is_daily_cap(error):
+    # Groq names the exhausted bucket: "tokens per day (TPD)" / "requests per day (RPD)".
+    # Waiting cannot fix a daily cap; only a different model or key can.
+    text = str(error).lower()
+    return "per day" in text or "(tpd)" in text or "(rpd)" in text
+
+
+def _switch_to_fallback():
+    # Called once, when the primary is rate limited beyond its retries. Prints loudly, because the
+    # team form must declare every model used and a judge may ask which one answered.
+    global _client, _fallback_in_use
+    if _fallback_in_use or not config.LLM_API_KEY_FALLBACK:
+        return False
+    if config.LLM_MODEL_FALLBACK == config.LLM_MODEL and config.LLM_API_KEY_FALLBACK == config.LLM_API_KEY:
+        return False  # the "fallback" would be the same quota: switching would not help
+    print("  PRIMARY MODEL RATE-LIMITED -> switching to fallback model %s" % config.LLM_MODEL_FALLBACK,
+          file=sys.stderr, flush=True)
+    _client = OpenAI(api_key=config.LLM_API_KEY_FALLBACK, base_url=config.LLM_BASE_URL_FALLBACK,
+                     timeout=90, max_retries=0)
+    config.LLM_MODEL = config.LLM_MODEL_FALLBACK
+    _recent_usage.clear()  # the fallback has its own per-minute budget
+    _fallback_in_use = True
+    return True
+
+
 def _estimate_tokens(request):
-    # rough but safe: ~4 characters per token for the prompt, plus the most the reply may use
-    return len(json.dumps(request["messages"])) // 4 + len(json.dumps(request.get("tools", []))) // 4 + MAX_COMPLETION_TOKENS
+    # ~4 characters per token for the prompt, plus a reply reservation based on the replies we have actually seen
+    # (reserving the full 2,048-token cap every time made almost every step wait a whole minute)
+    recent = _recent_completions[-8:]
+    reply_reserve = min(MAX_COMPLETION_TOKENS, max(600, int(1.5 * max(recent)))) if recent else 1200
+    return len(json.dumps(request["messages"])) // 4 + len(json.dumps(request.get("tools", []))) // 4 + reply_reserve
 
 
 def _wait_for_token_budget(needed_tokens):
@@ -69,21 +101,32 @@ def _retry_after_seconds(error, default_seconds):
 
 def chat(messages, tools=None, tool_choice="auto", temperature=0.0):
     # returns the assistant message object (has .content and .tool_calls)
-    request = {"model": config.LLM_MODEL, "messages": messages, "temperature": temperature,
-               "max_completion_tokens": MAX_COMPLETION_TOKENS}
+    global last_model_used
+    request = {"messages": messages, "temperature": temperature, "max_completion_tokens": MAX_COMPLETION_TOKENS}
     if tools:
         request["tools"] = tools
         request["tool_choice"] = tool_choice
     for attempt, wait_seconds in enumerate(BACKOFF_SECONDS + [None], start=1):
+        request["model"] = config.LLM_MODEL  # re-read every attempt: the fallback may have switched it
         _wait_for_token_budget(_estimate_tokens(request))
         try:
             response = get_client().chat.completions.create(**request)
-            used = getattr(response.usage, "total_tokens", None) or _estimate_tokens(request)
+            usage = getattr(response, "usage", None)
+            used = getattr(usage, "total_tokens", None) or _estimate_tokens(request)
             _recent_usage.append((time.time(), used))
+            if getattr(usage, "completion_tokens", None):
+                _recent_completions.append(usage.completion_tokens)
+            global last_usage
+            last_usage = {"prompt_tokens": getattr(usage, "prompt_tokens", None),
+                          "completion_tokens": getattr(usage, "completion_tokens", None), "total_tokens": used}
+            last_model_used = getattr(response, "model", None) or request["model"]
             return response.choices[0].message
         except TRANSIENT_ERRORS as error:
             if isinstance(error, openai.RateLimitError):
                 _recent_usage.append((time.time(), TOKEN_BUDGET))  # treat the minute as full
+                # a daily cap, or a limit that survived two waits, will not clear by waiting: change model
+                if (_is_daily_cap(error) or attempt >= 2) and _switch_to_fallback():
+                    continue
             if wait_seconds is None:
                 raise
             wait_seconds = _retry_after_seconds(error, wait_seconds)

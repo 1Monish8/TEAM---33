@@ -102,17 +102,17 @@
   <path class="l" d="M580,796 L580,772"/>
 
   <!-- day 2 -->
-  <text class="t g" x="390" y="980" text-anchor="middle">Day 2: designed, not built yet</text>
-  <rect class="day2" x="40" y="892" width="210" height="64" rx="8"/>
-  <text class="s g" x="145" y="918" text-anchor="middle">human approval y/N</text>
-  <text class="s g" x="145" y="936" text-anchor="middle">dry-run · logged</text>
-  <rect class="day2" x="285" y="892" width="210" height="64" rx="8"/>
-  <text class="s g" x="390" y="918" text-anchor="middle">Action API</text>
-  <text class="s g" x="390" y="936" text-anchor="middle">allowlisted remedy only</text>
-  <rect class="day2" x="530" y="892" width="210" height="64" rx="8"/>
-  <text class="s g" x="635" y="918" text-anchor="middle">verify recovery with health</text>
-  <text class="s g" x="635" y="936" text-anchor="middle">tools · else roll back</text>
-  <path class="dl" d="M250,924 L285,924"/><path class="dl" d="M495,924 L530,924"/>
+  <text class="t" x="390" y="980" text-anchor="middle">Day 2: built (actions.py, verify.py; four gates in architecture.png)</text>
+  <rect class="guard" x="40" y="892" width="210" height="64" rx="8"/>
+  <text class="s" x="145" y="918" text-anchor="middle">reviewer → dry run → y/N</text>
+  <text class="s" x="145" y="936" text-anchor="middle">approver logged</text>
+  <rect class="guard" x="285" y="892" width="210" height="64" rx="8"/>
+  <text class="s" x="390" y="918" text-anchor="middle">actions.py allowlist</text>
+  <text class="s" x="390" y="936" text-anchor="middle">KILL_SWITCH · action_log</text>
+  <rect class="core" x="530" y="892" width="210" height="64" rx="8"/>
+  <text class="s" x="635" y="918" text-anchor="middle">verify.py before/after</text>
+  <text class="s" x="635" y="936" text-anchor="middle">else roll back + escalate</text>
+  <path class="l" d="M250,924 L285,924"/><path class="l" d="M495,924 L530,924"/>
   <path class="dl" d="M420,760 L400,760 L400,870 L145,870 L145,892"/>
 
   <!-- ===================== RIGHT: policy ===================== -->

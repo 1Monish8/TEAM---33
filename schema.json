@@ -17,19 +17,40 @@
     "investigation"
   ],
   "properties": {
-    "incident_id": {"type": "string", "minLength": 1},
-    "generated_at": {"type": "string", "format": "date-time"},
-    "alert": {"type": "string"},
+    "incident_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "alert": {
+      "type": "string"
+    },
     "status": {
       "description": "diagnosed = evidence converges on one component; escalated = not confident, findings handed to a human",
-      "enum": ["diagnosed", "escalated"]
+      "enum": [
+        "diagnosed",
+        "escalated"
+      ]
     },
     "root_cause": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["service", "fault_type", "summary"],
+      "required": [
+        "service",
+        "fault_type",
+        "summary"
+      ],
       "properties": {
-        "service": {"type": ["string", "null"], "description": "The failing component, not the symptom service. null only when escalated."},
+        "service": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The failing component, not the symptom service. null only when escalated."
+        },
         "fault_type": {
           "enum": [
             "application_error",
@@ -43,77 +64,285 @@
             "unknown"
           ]
         },
-        "summary": {"type": "string", "minLength": 10}
+        "summary": {
+          "type": "string",
+          "minLength": 10
+        }
       }
     },
     "symptom_services": {
       "type": "array",
-      "items": {"type": "string"},
+      "items": {
+        "type": "string"
+      },
       "description": "Services that showed errors/latency only because they call the root cause."
     },
-    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-    "confidence_label": {"enum": ["high", "medium", "low"]},
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "confidence_label": {
+      "enum": [
+        "high",
+        "medium",
+        "low"
+      ]
+    },
     "evidence": {
       "type": "array",
-      "items": {"$ref": "#/$defs/evidence_item"}
+      "items": {
+        "$ref": "#/$defs/evidence_item"
+      }
     },
     "proposed_action": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["action", "target", "reason", "requires_approval"],
+      "required": [
+        "action",
+        "target",
+        "reason",
+        "requires_approval"
+      ],
       "properties": {
         "action": {
           "description": "Only remedies the Action API allows (Day 2). escalate_to_human when not confident.",
-          "enum": ["restart_service", "toggle_feature_flag", "throttle_load", "scale_service", "escalate_to_human"]
+          "enum": [
+            "restart_service",
+            "toggle_feature_flag",
+            "throttle_load",
+            "scale_service",
+            "escalate_to_human"
+          ]
         },
-        "target": {"type": ["string", "null"]},
-        "reason": {"type": "string"},
-        "requires_approval": {"const": true}
+        "target": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "requires_approval": {
+          "const": true
+        },
+        "parameters": {
+          "type": "object",
+          "description": "Action parameters, e.g. user_count for throttle_load. Never a flag name chosen by the agent."
+        }
       }
     },
     "investigation": {
       "type": "object",
-      "required": ["tool_calls", "tools_used", "model"],
+      "required": [
+        "tool_calls",
+        "tools_used",
+        "model"
+      ],
       "properties": {
-        "tool_calls": {"type": "integer", "minimum": 0},
-        "tools_used": {"type": "array", "items": {"type": "string"}},
-        "model": {"type": "string"},
-        "duration_seconds": {"type": "number"},
-        "calibration_notes": {"type": "array", "items": {"type": "string"}}
+        "tool_calls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tools_used": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "model": {
+          "type": "string"
+        },
+        "duration_seconds": {
+          "type": "number"
+        },
+        "calibration_notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
       }
     },
     "timeline": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["time", "event"],
-        "properties": {"time": {"type": "string"}, "event": {"type": "string"}}
+        "required": [
+          "time",
+          "event"
+        ],
+        "properties": {
+          "time": {
+            "type": "string"
+          },
+          "event": {
+            "type": "string"
+          }
+        }
       }
     },
-    "prevention": {"type": "string"}
+    "prevention": {
+      "type": "string"
+    },
+    "review": {
+      "type": "object",
+      "description": "GATE 1: a second LLM call that tries to disprove the diagnosis before any human sees it.",
+      "required": [
+        "ran",
+        "disputed",
+        "verdict"
+      ],
+      "properties": {
+        "ran": {
+          "type": "boolean"
+        },
+        "disputed": {
+          "type": "boolean"
+        },
+        "verdict": {
+          "type": "string"
+        },
+        "better_candidate": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "action_loop": {
+      "type": "object",
+      "description": "Day 2: dry run -> human approval -> act (allowlist) -> verify -> roll back.",
+      "required": [
+        "outcome"
+      ],
+      "properties": {
+        "outcome": {
+          "type": "string"
+        },
+        "mode": {
+          "enum": [
+            "interactive",
+            "auto-approve",
+            "dry-run"
+          ]
+        },
+        "approved": {
+          "type": "boolean"
+        },
+        "approved_by": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dry_run": {
+          "type": "object"
+        },
+        "result": {
+          "type": "object"
+        },
+        "verification": {
+          "type": "object"
+        },
+        "rollback": {
+          "type": "object"
+        },
+        "before": {
+          "type": "object"
+        },
+        "action_log_entries": {
+          "type": "array"
+        }
+      }
+    }
   },
   "$defs": {
     "evidence_item": {
       "type": "object",
-      "required": ["reference", "kind", "service"],
+      "required": [
+        "reference",
+        "kind",
+        "service"
+      ],
       "properties": {
-        "reference": {"type": "string", "pattern": "^(trace|log|metric)-[0-9]+$"},
-        "kind": {"enum": ["trace", "log", "metric"]},
-        "service": {"type": ["string", "null"]},
-        "why_it_matters": {"type": "string"}
+        "reference": {
+          "type": "string",
+          "pattern": "^(trace|log|metric)-[0-9]+$"
+        },
+        "kind": {
+          "enum": [
+            "trace",
+            "log",
+            "metric"
+          ]
+        },
+        "service": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "why_it_matters": {
+          "type": "string"
+        }
       },
       "allOf": [
         {
-          "if": {"properties": {"kind": {"const": "trace"}}},
-          "then": {"required": ["trace_id", "span_name", "duration_ms", "status"]}
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "trace"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "trace_id",
+              "span_name",
+              "duration_ms",
+              "status"
+            ]
+          }
         },
         {
-          "if": {"properties": {"kind": {"const": "log"}}},
-          "then": {"required": ["timestamp", "message"]}
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "log"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "timestamp",
+              "message"
+            ]
+          }
         },
         {
-          "if": {"properties": {"kind": {"const": "metric"}}},
-          "then": {"required": ["promql", "value", "timestamp"]}
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "metric"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "promql",
+              "value",
+              "timestamp"
+            ]
+          }
         }
       ]
     }

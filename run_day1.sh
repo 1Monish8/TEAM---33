@@ -39,6 +39,8 @@ if [ "$running" -lt 28 ]; then
 fi
 echo "stack: $running/28 containers running"
 
+$PY check_stack.py --fix || { echo "stack not healthy: fix the FAIL lines above first"; exit 1; }
+
 step "2/6 LLM smoke test (key + tool calling)"
 $PY smoke_test_llm.py
 
@@ -51,7 +53,7 @@ $PY practice/faultctl.py inject "$INCIDENT"
 sleep 120
 
 step "5/6 agent investigates: \"$ALERT\""
-$PY agent.py "$ALERT" --incident-id "$RUN_ID" > /dev/null
+$PY agent.py "$ALERT" --incident-id "$RUN_ID" --no-act > /dev/null   # Day 1 = diagnosis only; demo.sh runs the Day 2 loop
 $PY report.py "runs/$RUN_ID/diagnosis.json"
 
 step "6/6 reset"

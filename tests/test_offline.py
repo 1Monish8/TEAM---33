@@ -99,6 +99,142 @@ def test_feature_flag_text_is_redacted():
     assert tools._clean_text("Payment request failed. Invalid token.") == "Payment request failed. Invalid token."
 
 
+# ---------------------------------------------------------------------------
+# Day 2: the no-error branch (baselines) and the act-and-verify loop's safety gates
+# ---------------------------------------------------------------------------
+def _health_row(**overrides):
+    row = {"service": "accounting", "error_ratio": 0.0, "error_ratio_baseline": None, "p95_latency_ms": 15000.0,
+           "p95_baseline_ms": 15000.0, "status_hint": "ok"}
+    row.update(overrides)
+    return row
+
+
+def test_missing_baseline_fails_closed_and_chronic_latency_scores_zero():
+    # Day 1's three confident-wrong answers: accounting at its NORMAL 15 s was called SLOW
+    assert tools._is_slower_than_baseline(_health_row(p95_baseline_ms=None)) is False
+    assert tools._deviation_score(_health_row()) == 0.0
+    # a service whose latency tripled IS slow, and a newly failing one outranks it
+    assert tools._is_slower_than_baseline(_health_row(service="ad", p95_latency_ms=900.0, p95_baseline_ms=300.0))
+    slower = tools._deviation_score(_health_row(service="ad", p95_latency_ms=900.0, p95_baseline_ms=300.0))
+    failing = tools._deviation_score(_health_row(service="payment", error_ratio=0.5, p95_latency_ms=5.0, p95_baseline_ms=5.0))
+    assert failing > slower > 0
+
+
+import tempfile  # noqa: E402
+
+import actions  # noqa: E402
+
+
+def _with_temp_action_log(test):
+    # every action test writes to a throwaway log and kill-switch path, never the real ones
+    def wrapper():
+        saved = (actions.ACTION_LOG, actions.KILL_SWITCH_FILE, agent.KILL_SWITCH_FILE, actions.capture_state, actions._run,
+                 agent.verify.snapshot, agent.verify.confirm_recovery)
+        with tempfile.TemporaryDirectory() as folder:
+            actions.ACTION_LOG = pathlib.Path(folder) / "action_log.jsonl"
+            actions.KILL_SWITCH_FILE = agent.KILL_SWITCH_FILE = pathlib.Path(folder) / "KILL_SWITCH"
+            try:
+                test()
+            finally:
+                (actions.ACTION_LOG, actions.KILL_SWITCH_FILE, agent.KILL_SWITCH_FILE, actions.capture_state, actions._run,
+                 agent.verify.snapshot, agent.verify.confirm_recovery) = saved
+    wrapper.__name__ = test.__name__
+    return wrapper
+
+
+def _diagnosis(confidence=0.8, status="diagnosed"):
+    return {"incident_id": "t-act", "status": status, "confidence": confidence, "confidence_label": agent._label_for(confidence),
+            "root_cause": {"service": "frontend", "fault_type": "traffic_surge", "summary": "flood of requests"},
+            "evidence": [], "proposed_action": {"action": "throttle_load", "target": "load-generator",
+                                                "parameters": {"user_count": 1}, "reason": "test", "requires_approval": True}}
+
+
+def _stub_loop(recovered, executed):
+    # stand-ins for docker and Prometheus, so the safety logic is tested on its own
+    agent.verify.snapshot = lambda service, window_minutes=5: {"service": service}
+    agent.verify.confirm_recovery = lambda before, **kw: {"recovered": recovered, "verdict": "stub", "checks": []}
+    actions.capture_state = lambda action, target, parameters=None: {"user_count": 7}
+    actions._run = lambda action, target, parameters: executed.append((action, target, dict(parameters))) or {"ok": True}
+
+
+QUIET = {"progress": lambda text: None}
+
+
+@_with_temp_action_log
+def test_execute_refuses_without_approval_and_under_kill_switch():
+    assert actions.execute("throttle_load", "load-generator", {"user_count": 1})["ok"] is False
+    actions.KILL_SWITCH_FILE.write_text("stop")
+    assert "KILL_SWITCH" in actions.execute("throttle_load", "load-generator", {"user_count": 1}, approved=True)["reason"]
+    assert len(actions.read_log()) == 2  # refusals are logged too
+    assert actions.describe("scale_service", "payment")["ok"] is False  # honest: Kubernetes only
+    assert actions.describe("rm_rf", "payment")["ok"] is False          # not allowlisted
+
+
+@_with_temp_action_log
+def test_human_no_means_nothing_changes():
+    executed = []
+    _stub_loop(True, executed)
+    loop = agent.act_on_diagnosis(_diagnosis(), ask=lambda question: "n", **QUIET)
+    assert executed == [] and loop["approved"] is False and "rejected" in loop["outcome"]
+
+
+@_with_temp_action_log
+def test_low_confidence_and_escalation_never_act():
+    executed = []
+    _stub_loop(True, executed)
+    yes = lambda question: "y"  # noqa: E731
+    assert "below" in agent.act_on_diagnosis(_diagnosis(confidence=0.4), ask=yes, **QUIET)["outcome"]
+    assert "escalated" in agent.act_on_diagnosis(_diagnosis(status="escalated"), ask=yes, **QUIET)["outcome"]
+    assert executed == []
+
+
+@_with_temp_action_log
+def test_kill_switch_stops_the_loop_before_acting():
+    executed = []
+    _stub_loop(True, executed)
+    actions.KILL_SWITCH_FILE.write_text("stop")
+    loop = agent.act_on_diagnosis(_diagnosis(), ask=lambda question: "y", **QUIET)
+    assert executed == [] and "KILL_SWITCH" in loop["outcome"]
+
+
+@_with_temp_action_log
+def test_dry_run_changes_nothing():
+    executed = []
+    _stub_loop(True, executed)
+    loop = agent.act_on_diagnosis(_diagnosis(), dry_run=True, **QUIET)
+    assert executed == [] and loop["outcome"].startswith("dry run")
+
+
+@_with_temp_action_log
+def test_verified_recovery_and_rollback_on_failure():
+    executed = []
+    _stub_loop(True, executed)
+    ok = agent.act_on_diagnosis(_diagnosis(), ask=lambda question: "y", **QUIET)
+    assert ok["outcome"].startswith("recovered and verified")
+    assert executed == [("throttle_load", "load-generator", {"user_count": 1})]
+    executed.clear()
+    _stub_loop(False, executed)
+    failed = agent.act_on_diagnosis(_diagnosis(), ask=lambda question: "y", **QUIET)
+    # it acted, recovery was not confirmed, so the load generator goes back to its captured 7 users and a human is called
+    assert executed == [("throttle_load", "load-generator", {"user_count": 1}),
+                        ("throttle_load", "load-generator", {"user_count": 7})]
+    assert "rolled back" in failed["outcome"] and failed["rollback"]["ok"]
+
+
+def test_hallucination_demo_is_rejected_by_the_guard():
+    import os
+    metric, trace, log = _seed_registry()
+    os.environ["DEMO_HALLUCINATION"] = "1"
+    try:
+        run = _run()
+        diagnosis, problem = agent.build_diagnosis(_args([metric, trace, log]), run)
+        assert diagnosis is None and "trace-9999" in problem          # planted once: rejected
+        diagnosis, problem = agent.build_diagnosis(_args([metric, trace, log]), run)
+        assert problem is None and diagnosis["status"] == "diagnosed"  # resubmitted with real refs: accepted
+    finally:
+        del os.environ["DEMO_HALLUCINATION"]
+
+
 if __name__ == "__main__":
     for test_name, test in list(globals().items()):
         if test_name.startswith("test_"):

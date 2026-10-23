@@ -89,8 +89,20 @@ def inject(name):
     print("injected", name)
 
 
+# Some flag-driven faults leave residue after the flag is turned off: adHighCpu's CPU-burning threads keep
+# running (we measured ad at ~20x its normal CPU three hours after the flag went off), and leaks keep their
+# memory. "Reset everything" therefore restarts those services, the way the organisers' faultctl promises to.
+RESIDUE_RESTART = {"adHighCpu": "ad", "adManualGc": "ad", "recommendationCacheFailure": "recommendation",
+                   "emailMemoryLeak": "email"}
+
+
 def reset():
     state = _load_state()
+    for name in state.get("active", []):
+        incident = INCIDENTS.get(name, {})
+        container = RESIDUE_RESTART.get(incident.get("flag"))
+        if container:
+            _docker("restart", container)
     for pid in state.get("loop_pids", []):
         try:
             os.killpg(pid, signal.SIGTERM)

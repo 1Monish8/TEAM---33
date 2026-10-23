@@ -103,6 +103,9 @@ def _error_status_code():
     return _error_status_literal
 
 
+BASELINE_GAP = "10m"  # baselines ignore the most recent 10 minutes: that is where the incident lives
+
+
 def get_service_health(window_minutes=5):
     """Error ratio, request rate and p95 latency per service, worst first.
     Also flags services that reported in the last hour but have gone silent (likely DOWN)."""
@@ -120,15 +123,16 @@ def get_service_health(window_minutes=5):
             "(rate(traces_span_metrics_duration_milliseconds_bucket[" + window + "])))"
         ),
         "seen_last_hour": "max by (service_name) (max_over_time(traces_span_metrics_calls_total[60m]))",
-        # baselines = median over the last hour, so chronic behaviour is not mistaken for the incident
-        # (e.g. accounting's p95 is always ~15 s: it measures Kafka queue wait)
+        # Baselines = each service's own normal, so chronic behaviour (accounting's p95 is always ~15 s: it measures
+        # Kafka queue wait) is not mistaken for the incident. Median over the last 2 h, EXCLUDING the last 10 min,
+        # so the incident being investigated cannot drag its own baseline up and hide itself.
         "error_ratio_baseline": (
             "quantile_over_time(0.5, (sum by (service_name) (rate(traces_span_metrics_calls_total{status_code=\"" + error_code
-            + "\"}[5m])) / sum by (service_name) (rate(traces_span_metrics_calls_total[5m])))[60m:1m])"
+            + "\"}[5m])) / sum by (service_name) (rate(traces_span_metrics_calls_total[5m])))[2h:1m] offset " + BASELINE_GAP + ")"
         ),
         "p95_baseline_ms": (
             "quantile_over_time(0.5, (histogram_quantile(0.95, sum by (service_name, le) "
-            "(rate(traces_span_metrics_duration_milliseconds_bucket[5m]))))[60m:1m])"
+            "(rate(traces_span_metrics_duration_milliseconds_bucket[5m]))))[2h:1m] offset " + BASELINE_GAP + ")"
         ),
     }
     rows = {}
@@ -147,6 +151,8 @@ def get_service_health(window_minutes=5):
             if field == "seen_last_hour":
                 continue
             if value is not None:
+                if field.startswith("error_ratio"):
+                    value = min(1.0, max(0.0, value))  # a ratio of two rates can overshoot briefly when a series goes stale
                 row[field] = round(value, 4 if field.startswith("error_ratio") else 1)
             timestamps[service_name] = _now_iso(float(result_row["value"][0]))
 
@@ -162,17 +168,28 @@ def get_service_health(window_minutes=5):
             row["status_hint"] = "ok (chronic errors: same as its last-hour baseline, not this incident)"
         elif _is_slower_than_baseline(row):
             row["status_hint"] = "SLOW"
+        elif _is_much_slower_than_its_normal(row):
+            # fast services slow down in relative terms: ad going from 8 ms to 28 ms is a real change
+            row["status_hint"] = "SLOWER (%.1fx its own normal p95)" % (row["p95_latency_ms"] / row["p95_baseline_ms"])
+        elif row["p95_baseline_ms"] is None and (row["p95_latency_ms"] or 0) >= 500:
+            # no baseline = we do not know this service's normal: say so instead of guessing either way
+            row["status_hint"] = "unknown (no baseline for this service: cannot tell normal from incident)"
         elif row["p95_latency_ms"] and row["p95_latency_ms"] >= 1000:
             row["status_hint"] = "ok (chronically slow: same as its last-hour baseline, normal for this service)"
         else:
             row["status_hint"] = "ok"
+        row["deviation_score"] = _deviation_score(row)
 
+    # Ranked by how far each service has moved from ITS OWN normal (the no-error twin of the
+    # deepest-failing-span rule). Silent services first: a service that stopped reporting is down.
     ordered = sorted(rows.values(), key=_health_sort_key, reverse=True)
+    last_deviation_ranking[:] = [(row["service"], row["deviation_score"]) for row in ordered
+                                 if row["service"] not in CLIENT_SERVICES]
     for row in ordered[: config.MAX_ITEMS_PER_TOOL_RESULT]:
         if row["status_hint"].startswith("ok"):
             continue  # only unhealthy rows are worth citing; keeps the registry small
         metric_name = "error_ratio" if row["status_hint"] == "ERRORS" else (
-            "p95_latency_ms" if row["status_hint"] == "SLOW" else "requests_per_second")
+            "p95_latency_ms" if row["status_hint"].startswith(("SLOW", "SLOWER")) else "requests_per_second")
         row["ref"] = register_evidence_item("metric", {
             "service": row["service"],
             "metric": metric_name,
@@ -180,22 +197,74 @@ def get_service_health(window_minutes=5):
             "promql": queries[metric_name],
             "timestamp": timestamps.get(row["service"], _now_iso()),
             "baseline": row["error_ratio_baseline"] if metric_name == "error_ratio" else row["p95_baseline_ms"],
+            "deviation_score": row["deviation_score"],
         })
-    return {"window": _window(window_minutes), "services": ordered[: config.MAX_ITEMS_PER_TOOL_RESULT * 2],
-            "note": "*_baseline = median of the last hour. Only a change from baseline is evidence of this incident."}
+    result = {"window": _window(window_minutes), "services": ordered[: config.MAX_ITEMS_PER_TOOL_RESULT * 2],
+              "note": ("Ranked by deviation_score = how far each service has moved from its OWN last-hour baseline "
+                       "(*_baseline = median of the last 2 h, excluding the last 10 min). A large absolute number with deviation_score near 0 "
+                       "is normal for that service and is NOT evidence of this incident. The top row is the strongest "
+                       "candidate; NOT_REPORTING services are listed first because a silent service is down.")}
+    staleness = _span_metrics_age_seconds()
+    if staleness is None or staleness > 180:
+        # Seen on this stack: after ~3 h the collector's Prometheus export can start failing and span metrics
+        # simply stop. An empty or frozen table must not read as "everything is healthy".
+        result["pipeline_warning"] = ("SPAN METRICS UNAVAILABLE (%s): this table cannot be trusted. Do not conclude that "
+                                      "nothing is wrong; investigate with search_traces, search_logs and get_container_health."
+                                      % ("no samples at all" if staleness is None else "newest sample is %ds old" % staleness))
+    return result
+
+
+def _span_metrics_age_seconds():
+    # seconds since Prometheus last received any span-metrics sample (None = none in the last 10 minutes)
+    try:
+        rows = run_prometheus_query("time() - max(max_over_time(timestamp(traces_span_metrics_calls_total)[10m:30s]))")
+        return int(float(rows[0]["value"][1])) if rows else None
+    except Exception:
+        return None
+
+
+# services ranked by deviation in the most recent get_service_health call; agent.build_diagnosis
+# uses it so that "high confidence" also requires the named service to be among the most-changed ones
+last_deviation_ranking = []
 
 
 def _is_slower_than_baseline(row):
-    # slow = p95 at least 500 ms AND at least double its own last-hour median
+    # Slow means slow FOR THIS SERVICE: p95 at least 500 ms AND at least double its own last-hour median.
+    # Fails CLOSED: with no baseline we do not know what normal is, so it is NOT evidence. (Failing open
+    # here labelled accounting, a Kafka batch consumer that always sits at ~15 s, SLOW on every run and
+    # cost us three confidently-wrong answers on Day 1.)
     p95, baseline = row["p95_latency_ms"], row["p95_baseline_ms"]
     if not p95 or p95 < 500:
         return False
-    return baseline is None or p95 >= 2 * baseline
+    if baseline is None:
+        return False
+    return p95 >= 2 * baseline
+
+
+def _is_much_slower_than_its_normal(row):
+    p95, baseline = row["p95_latency_ms"], row["p95_baseline_ms"]
+    return bool(p95 and baseline and p95 >= 20 and p95 >= 3 * baseline)
+
+
+def _deviation_score(row):
+    # How far is this service from its OWN normal right now? A missing latency baseline contributes nothing
+    # (unknown is not the same as bad). A missing error baseline means the error series never existed in the
+    # last hour, i.e. zero errors, so it counts as 0. Errors weigh more than latency: a service that started
+    # failing beats one that got slower.
+    if row["status_hint"].startswith("NOT_REPORTING"):
+        return 10.0
+    if row["service"] in CLIENT_SERVICES:
+        return 0.0
+    error_delta = max(0.0, row["error_ratio"] - (row["error_ratio_baseline"] or 0.0))
+    latency_excess = 0.0
+    if row["p95_latency_ms"] and row["p95_baseline_ms"]:
+        latency_excess = max(0.0, row["p95_latency_ms"] / max(row["p95_baseline_ms"], 1.0) - 1.0)
+    return round(max(error_delta * 20.0, latency_excess), 3)
 
 
 def _health_sort_key(row):
-    # down first, then by error ratio, then by latency
-    return (row["status_hint"].startswith("NOT_REPORTING"), row["error_ratio"], row["p95_latency_ms"] or 0)
+    # down first, then by how far the service has moved from its own baseline
+    return (row["status_hint"].startswith("NOT_REPORTING"), row["deviation_score"], row["error_ratio"])
 
 
 # container metric names vary by collector version; resolve them once from Prometheus
@@ -256,10 +325,19 @@ def get_container_health(window_minutes=15):
 
     if names["cpu"]:
         collect("cpu_cores_used", "max by (container_name) (avg_over_time(" + names["cpu"] + "[2m]))")
-        collect("cpu_baseline", "max by (container_name) (quantile_over_time(0.5, " + names["cpu"] + "[60m]))")
+        # CPU "normal" = the container's median over the last 2 h, excluding the last 10 min (where the incident lives),
+        # like every other baseline. A low percentile over 24 h was tried and rejected: it caught quiet start-up periods
+        # and made every busy container look like a 4x spike. Known weakness, stated honestly: a fault that has been
+        # running for hours becomes "normal" (seen when adHighCpu's threads outlived the flag; faultctl reset now
+        # restarts such services).
+        collect("cpu_baseline", "max by (container_name) (quantile_over_time(0.5, " + names["cpu"] + "[2h] offset " + BASELINE_GAP + "))")
     if names["memory"] and names["memory_limit"]:
-        collect("memory_pct_of_limit",
-                "max by (container_name) (" + names["memory"] + ") / max by (container_name) (" + names["memory_limit"] + ") * 100")
+        memory_pct = "(max by (container_name) (%s) / max by (container_name) (%s) * 100)" % (names["memory"], names["memory_limit"])
+        collect("memory_pct_of_limit", memory_pct)
+        # a cache leak is a rising line long before it is a high number: compare with the window start
+        collect("memory_pct_at_window_start", memory_pct.replace(names["memory"], names["memory"] + " offset " + window)
+                .replace(names["memory_limit"], names["memory_limit"] + " offset " + window))
+        collect("memory_baseline_pct", "quantile_over_time(0.5, " + memory_pct + "[2h:1m] offset " + BASELINE_GAP + ")")
     if names["uptime"]:
         collect("uptime_resets_in_window", "max by (container_name) (resets(" + names["uptime"] + "[" + window + "]))")
 
@@ -286,8 +364,14 @@ def get_container_health(window_minutes=15):
             "cpu_cores_used": metrics.get("cpu_cores_used"),
             "cpu_baseline": metrics.get("cpu_baseline"),
             "memory_pct_of_limit": metrics.get("memory_pct_of_limit"),
+            "memory_pct_at_window_start": metrics.get("memory_pct_at_window_start"),
+            "memory_baseline_pct": metrics.get("memory_baseline_pct"),
             "uptime_resets_in_window": metrics.get("uptime_resets_in_window"),
         }
+        cpu_now, cpu_base = row["cpu_cores_used"] or 0, row["cpu_baseline"] or 0
+        row["cpu_vs_baseline"] = round(cpu_now / max(cpu_base, 0.1), 1) if cpu_now else None
+        memory_now, memory_then = row["memory_pct_of_limit"] or 0, row["memory_pct_at_window_start"]
+        row["memory_trend"] = ("%+.0f points over the window" % (memory_now - memory_then)) if memory_then is not None else None
         problems = []
         if not state.get("Running"):
             problems.append("NOT_RUNNING (state=%s exit_code=%s since %s)" % (state.get("Status"), state.get("ExitCode"), state.get("FinishedAt", "")[:19] + "Z"))
@@ -300,11 +384,18 @@ def get_container_health(window_minutes=15):
             problems.append("CRASHED_AND_RESTARTED (restarted by Docker %d min ago)" % (row["uptime_seconds"] // 60))
         elif state.get("Running") and row["uptime_seconds"] < 120 and not stack_restart:
             problems.append("JUST_RESTARTED (uptime %ds)" % row["uptime_seconds"])
-        cpu_now, cpu_base = row["cpu_cores_used"] or 0, row["cpu_baseline"] or 0
         if name not in CLIENT_SERVICES and cpu_now >= 0.5 and cpu_now >= 3 * max(cpu_base, 0.1):
-            problems.append("CPU_SPIKE (%.2f vs baseline %.2f)" % (cpu_now, cpu_base))
-        if (row["memory_pct_of_limit"] or 0) >= 98:  # JVMs (kafka) idle at ~95%
-            problems.append("MEMORY_NEAR_LIMIT")
+            problems.append("CPU_SPIKE (%.2f vs baseline %.2f, %.1fx its normal)" % (cpu_now, cpu_base, row["cpu_vs_baseline"]))
+        # memory is judged against the container's OWN normal too: kafka's JVM idles at ~95% of its limit,
+        # so an absolute threshold would flag it on every run (the same false lead as accounting's latency)
+        memory_base = row["memory_baseline_pct"]
+        if memory_now >= 90 and (memory_base is None or memory_now >= memory_base + 10):
+            problems.append("MEMORY_HIGH (%.0f%% of limit, usually %s)" % (memory_now, "%.0f%%" % memory_base if memory_base is not None else "unknown"))
+        elif (memory_then is not None and memory_now - memory_then >= 15
+              and (memory_base is None or memory_now >= memory_base + 10)):
+            # a leak is a sustained rise above the container's normal; a 10-point garbage-collection sawtooth is not
+            problems.append("MEMORY_CLIMBING (%.0f%% -> %.0f%% of limit across the window, usually %s)"
+                            % (memory_then, memory_now, "%.0f%%" % memory_base if memory_base is not None else "unknown"))
         if row["cpu_limit_cores"] is not None and row["cpu_limit_cores"] < 0.5:
             problems.append("CPU_LIMITED (limit %.2f cores)" % row["cpu_limit_cores"])
         row["problems"] = problems
@@ -315,7 +406,7 @@ def get_container_health(window_minutes=15):
                 source_query, value = used_queries.get("cpu_cores_used", source_query), row["cpu_cores_used"]
             elif problems[0].startswith(("RESTART_LOOP", "JUST_RESTARTED", "CRASHED_AND_RESTARTED")):
                 source_query, value = used_queries.get("uptime_resets_in_window", source_query), row["uptime_resets_in_window"]
-            elif problems[0] == "MEMORY_NEAR_LIMIT":
+            elif problems[0].startswith(("MEMORY_HIGH", "MEMORY_CLIMBING")):
                 source_query, value = used_queries.get("memory_pct_of_limit", source_query), row["memory_pct_of_limit"]
             elif problems[0].startswith("CPU_LIMITED"):
                 value = row["cpu_limit_cores"]
@@ -328,15 +419,28 @@ def get_container_health(window_minutes=15):
             })
         rows.append(row)
 
-    rows.sort(key=lambda row: (len(row["problems"]), row["cpu_cores_used"] or 0), reverse=True)
+    # Never report "no problems" next to a container running far hotter than its own normal: on Day 1 the
+    # answer sat in a busiest_cpu footnote while the problems list read as "all clear".
+    if not any(row["problems"] for row in rows):
+        outliers = [r for r in rows if r["container"] not in CLIENT_SERVICES and (r["cpu_vs_baseline"] or 0) >= 3
+                    and (r["cpu_cores_used"] or 0) >= 0.2]
+        for row in sorted(outliers, key=lambda r: r["cpu_vs_baseline"], reverse=True)[:2]:
+            row["problems"].append("CPU_ABOVE_BASELINE (%.2f vs baseline %.2f, %.1fx its normal)"
+                                   % (row["cpu_cores_used"], row["cpu_baseline"] or 0, row["cpu_vs_baseline"]))
+            row["ref"] = register_evidence_item("metric", {
+                "service": row["container"], "metric": "container.cpu_above_baseline", "value": row["cpu_cores_used"],
+                "promql": used_queries.get("cpu_cores_used", ""), "timestamp": _now_iso(),
+                "baseline": row["cpu_baseline"]})
+
+    rows.sort(key=lambda row: (len(row["problems"]), row["cpu_vs_baseline"] or 0), reverse=True)
     result = {
         "window": _window(window_minutes),
         "containers_checked": len(rows),
         "containers_with_problems": [row for row in rows if row["problems"]],
-        "busiest_cpu": [{"container": r["container"], "cpu_cores_used": r["cpu_cores_used"], "cpu_baseline": r["cpu_baseline"]}
-                        for r in rows if not r["problems"]][:5],
-        "note": ("cpu_* are docker_stats utilisation; compare cpu_cores_used with cpu_baseline (last-hour median). "
-                 "A tiny cpu_limit_cores with high latency = CPU starvation."),
+        "most_changed_cpu": [{"container": r["container"], "cpu_cores_used": r["cpu_cores_used"], "cpu_baseline": r["cpu_baseline"],
+                              "cpu_vs_baseline": r["cpu_vs_baseline"]} for r in rows if not r["problems"]][:5],
+        "note": ("Judge each container against its OWN normal: cpu_vs_baseline is current CPU / last-hour median, "
+                 "memory_trend is the change across the window. A tiny cpu_limit_cores with high latency = CPU starvation."),
     }
     if stack_restart:
         result["stack_restart"] = ("%d of %d containers started within the window: the whole stack was restarted, "

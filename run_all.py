@@ -4,6 +4,10 @@
 #   python run_all.py payment-failure ad-high-cpu
 #   WAIT_SECONDS=150 python run_all.py
 #
+# The sweep measures DIAGNOSIS only (it never acts on the demo): every run goes through agent.diagnose(),
+# including the reviewer. Each incident gets diagnosis.json, report.md, transcript.jsonl and verdict.json;
+# calibration.py turns the verdicts into the stated-confidence vs actual-accuracy table.
+#
 # The expected answers live in practice/incidents.json and are used ONLY here, for scoring
 # after the agent has answered. The agent never sees them (rule: no hard-coded answers).
 import datetime
@@ -15,6 +19,7 @@ import sys
 import time
 
 import agent
+import check_stack
 import config
 import report
 
@@ -22,6 +27,7 @@ HERE = config.REPO_ROOT
 INCIDENTS = json.loads((HERE / "practice" / "incidents.json").read_text())["incidents"]
 WAIT_SECONDS = int(os.environ.get("WAIT_SECONDS", "120"))
 SETTLE_SECONDS = int(os.environ.get("SETTLE_SECONDS", "150"))
+# The ONE place the fault injector is called. When the organisers' faultctl arrives, change this line only.
 FAULTCTL = [sys.executable, str(HERE / "practice" / "faultctl.py")]
 
 
@@ -58,6 +64,10 @@ def score(name, incident, diagnosis):
         verdict = "WRONG" + (" (confident!)" if diagnosis["confidence_label"] == "high" else "")
     return {
         "incident": name,
+        "correct": correct and not escalated,
+        "escalated": escalated,
+        "confidence_value": diagnosis["confidence"],
+        "reviewer": ("disputed" if diagnosis.get("review", {}).get("disputed") else "confirmed") if diagnosis.get("review", {}).get("ran") else "-",
         "expected": incident["expected_service"],
         "agent_said": said,
         "fault_type": diagnosis["root_cause"]["fault_type"],
@@ -71,7 +81,7 @@ def score(name, incident, diagnosis):
 
 
 def write_table(rows, path):
-    columns = ["incident", "expected", "agent_said", "fault_type", "confidence", "evidence_real", "schema_valid",
+    columns = ["incident", "expected", "agent_said", "fault_type", "confidence", "reviewer", "evidence_real", "schema_valid",
                "tool_calls", "seconds", "verdict"]
     lines = ["| " + " | ".join(columns) + " |", "|" + "---|" * len(columns)]
     for row in rows:
@@ -94,15 +104,19 @@ def main():
         incident = INCIDENTS[name]
         print("\n=== %s: inject, wait %ds" % (name, WAIT_SECONDS), flush=True)
         faultctl("reset")
+        check_stack.ensure_span_metrics(log=lambda text: print("  preflight: " + text, flush=True))
         wait_for_quiet_baseline()
         faultctl("inject", name)
         time.sleep(WAIT_SECONDS)
         try:
             diagnosis = agent.diagnose(incident["alert"], incident_id=name, out_dir=out_dir)
             rows.append(score(name, incident, diagnosis))
+            (out_dir / name / "verdict.json").write_text(json.dumps(
+                {k: rows[-1][k] for k in ("incident", "expected", "agent_said", "correct", "escalated", "confidence_value", "verdict")},
+                indent=2) + "\n")
         except Exception as error:  # record the crash and keep sweeping: fix after the table exists
             rows.append({"incident": name, "expected": incident["expected_service"], "agent_said": "CRASH",
-                         "fault_type": "-", "confidence": "-", "evidence_real": "-", "schema_valid": "-",
+                         "fault_type": "-", "confidence": "-", "reviewer": "-", "evidence_real": "-", "schema_valid": "-",
                          "tool_calls": "-", "seconds": "-", "verdict": "CRASH: " + str(error)[:80]})
         finally:
             faultctl("reset")
