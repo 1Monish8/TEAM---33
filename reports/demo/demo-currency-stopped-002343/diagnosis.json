@@ -1,0 +1,149 @@
+{
+  "incident_id": "demo-currency-stopped-002343",
+  "generated_at": "2026-10-23T18:57:52Z",
+  "alert": "Error rate elevated on frontend",
+  "status": "diagnosed",
+  "root_cause": {
+    "service": "currency",
+    "fault_type": "service_down",
+    "summary": "The Currency service container has exited, causing it to be unavailable. Frontend and Checkout services report errors when they attempt to call CurrencyService, leading to elevated error rates on frontend."
+  },
+  "symptom_services": [
+    "frontend",
+    "checkout"
+  ],
+  "confidence": 0.6,
+  "confidence_label": "medium",
+  "evidence": [
+    {
+      "service": "currency",
+      "metric": "container_state",
+      "value": "exited",
+      "promql": "docker inspect currency (State.Status)",
+      "timestamp": "2026-10-23T18:53:44Z",
+      "deviation_score": 10.0,
+      "reference": "metric-1",
+      "kind": "metric",
+      "why_it_matters": "Currency service not reporting metrics, marked DOWN."
+    },
+    {
+      "service": "currency",
+      "metric": "container.not_running",
+      "value": "exited",
+      "promql": "docker inspect currency",
+      "timestamp": "2026-10-23T18:54:46Z",
+      "reference": "metric-4",
+      "kind": "metric",
+      "why_it_matters": "Container health shows currency container NOT_RUNNING (exited)."
+    },
+    {
+      "trace_id": "204d324949b5ce7c65ad59b41446fc0a",
+      "service": "checkout",
+      "span_name": "oteldemo.CurrencyService/Convert",
+      "duration_ms": 0.4,
+      "status": "ERROR",
+      "exception": "name resolver error: produced zero addresses",
+      "timestamp": "2026-10-23T18:56:26Z",
+      "reference": "trace-5",
+      "kind": "trace",
+      "why_it_matters": "Checkout trace fails at CurrencyService/Convert, indicating calls to currency fail."
+    },
+    {
+      "trace_id": "53ee291e6578e5ed699d671a0bf10e40",
+      "service": "frontend",
+      "span_name": "oteldemo.CurrencyService/GetSupportedCurrencies",
+      "duration_ms": 0.8,
+      "status": "ERROR",
+      "exception": null,
+      "timestamp": "2026-10-23T18:56:15Z",
+      "reference": "trace-6",
+      "kind": "trace",
+      "why_it_matters": "Frontend trace fails at CurrencyService/GetSupportedCurrencies, confirming downstream errors."
+    }
+  ],
+  "proposed_action": {
+    "action": "restart_service",
+    "target": "currency",
+    "parameters": {},
+    "reason": "Currency service container is exited; restarting will bring it back online and stop downstream errors.",
+    "requires_approval": true
+  },
+  "investigation": {
+    "tool_calls": 4,
+    "tools_used": [
+      "get_container_health",
+      "get_service_health",
+      "search_traces"
+    ],
+    "model": "openai/gpt-oss-120b",
+    "duration_seconds": 248.7,
+    "calibration_notes": [
+      "confidence capped from 0.86 to 0.70: only 1 evidence kind(s) name currency",
+      "confidence lowered from 0.70 to 0.60: the reviewer disputed this diagnosis"
+    ]
+  },
+  "timeline": [
+    {
+      "time": "2026-10-23T18:53:43Z",
+      "event": "Alert received: Error rate elevated on frontend"
+    },
+    {
+      "time": "2026-10-23T18:57:52Z",
+      "event": "Diagnosis submitted after 4 tool calls"
+    }
+  ],
+  "prevention": "Implement health checks and auto-restart for the currency service to avoid manual downtime.",
+  "review": {
+    "ran": true,
+    "disputed": true,
+    "better_candidate": "payment",
+    "verdict": "DISPUTED: the conclusion ignores that the payment service deviated far more from its baseline (score 499) than currency, making payment a far more likely root cause | better candidate: payment.",
+    "model": "openai/gpt-oss-120b"
+  },
+  "action_loop": {
+    "started_at": "2026-10-23T18:57:53Z",
+    "proposed": {
+      "action": "restart_service",
+      "target": "currency",
+      "parameters": {},
+      "reason": "Currency service container is exited; restarting will bring it back online and stop downstream errors.",
+      "requires_approval": true
+    },
+    "mode": "interactive",
+    "dry_run": {
+      "ok": true,
+      "command": "docker restart currency",
+      "effect": "Container currency stops and starts (or starts, if it was stopped). Requests to it fail for a few seconds; in-memory state (caches, leaked memory) is cleared.",
+      "reversible": false,
+      "undo": "none needed: a restart changes no configuration"
+    },
+    "parameters": {},
+    "approved": false,
+    "approved_by": null,
+    "approved_at": "2026-10-23T18:57:53Z",
+    "outcome": "rejected by the human: no change was made",
+    "finished_at": "2026-10-23T18:57:53Z",
+    "action_log_entries": [
+      {
+        "incident_id": "demo-currency-stopped-002343",
+        "purpose": "rejected by the human",
+        "action": "restart_service",
+        "target": "currency",
+        "parameters": {},
+        "approved": false,
+        "planned": {
+          "ok": true,
+          "command": "docker restart currency",
+          "effect": "Container currency stops and starts (or starts, if it was stopped). Requests to it fail for a few seconds; in-memory state (caches, leaked memory) is cleared.",
+          "reversible": false,
+          "undo": "none needed: a restart changes no configuration"
+        },
+        "result": {
+          "ok": false,
+          "reason": "rejected by the human"
+        },
+        "logged_at": "2026-10-23T18:57:53Z"
+      }
+    ]
+  }
+}

@@ -1,0 +1,9 @@
+injected currency-stopped
+  [0] get_service_health({"window_minutes": 5}) 0.2s
+  pacing: 2846 tokens used in the last minute, waiting 60s
+  [1] search_traces({"limit": 5, "only_errors": true, "service": "frontend", "window_minutes": 5}) 0.2s
+KILL_SWITCH present: stopping the investigation
+wrote reports/demo/killswitch-test
+  OUTCOME: escalated to a human, no action: the agent was not confident enough to propose a change
+updated reports/demo/killswitch-test with the action loop
+EXIT=done

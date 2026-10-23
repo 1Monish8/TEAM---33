@@ -1,0 +1,216 @@
+{
+  "incident_id": "demo-payment-failure-001050",
+  "generated_at": "2026-10-23T18:47:05Z",
+  "alert": "Error rate above 5% on frontend checkout requests",
+  "status": "diagnosed",
+  "root_cause": {
+    "service": "payment",
+    "fault_type": "application_error",
+    "summary": "The payment service is returning an 'Invalid token' error for checkout requests, causing the checkout endpoint to fail and surface a >5% error rate to users."
+  },
+  "symptom_services": [
+    "checkout",
+    "frontend",
+    "frontend-proxy"
+  ],
+  "confidence": 0.6,
+  "confidence_label": "medium",
+  "evidence": [
+    {
+      "service": "checkout",
+      "metric": "error_ratio",
+      "value": 0.2041,
+      "promql": "sum by (service_name) (rate(traces_span_metrics_calls_total{status_code=\"STATUS_CODE_ERROR\"}[5m])) / sum by (service_name) (rate(traces_span_metrics_calls_total[5m]))",
+      "timestamp": "2026-10-23T18:40:52Z",
+      "baseline": 0.0,
+      "deviation_score": 149.368,
+      "reference": "metric-1",
+      "kind": "metric",
+      "why_it_matters": "checkout service shows high error ratio (20%) and high latency, indicating failures."
+    },
+    {
+      "trace_id": "8ea7bce9efe7a48774778dd29378dc56",
+      "service": "payment",
+      "span_name": "charge",
+      "duration_ms": 0.6,
+      "status": "ERROR",
+      "exception": "Payment request failed. Invalid token. demo.user_context.loyalty_level=gold",
+      "timestamp": "2026-10-23T18:41:47Z",
+      "reference": "trace-8",
+      "kind": "trace",
+      "why_it_matters": "Deepest failing span shows payment charge error with Invalid token."
+    },
+    {
+      "timestamp": "2026-10-23T18:42:57.348Z",
+      "service": "payment",
+      "severity": "warn",
+      "message": "Payment request failed. Invalid token. demo.user_context.loyalty_level=gold",
+      "trace_id": "ed843d8eab54d728d255c538e61e22bc",
+      "reference": "log-7",
+      "kind": "log",
+      "why_it_matters": "Payment service log repeats the same Invalid token warning."
+    }
+  ],
+  "proposed_action": {
+    "action": "toggle_feature_flag",
+    "target": "payment",
+    "parameters": {},
+    "reason": "Payment service is rejecting checkout requests with 'Invalid token', causing checkout failures.",
+    "requires_approval": true
+  },
+  "investigation": {
+    "tool_calls": 5,
+    "tools_used": [
+      "get_container_health",
+      "get_service_health",
+      "get_trace",
+      "search_logs",
+      "search_traces"
+    ],
+    "model": "openai/gpt-oss-120b",
+    "duration_seconds": 374.1,
+    "calibration_notes": [
+      "confidence capped from 0.82 to 0.70: payment is not among the services that moved most from their own baseline (top: checkout, ad, frontend)",
+      "confidence lowered from 0.70 to 0.60: the reviewer disputed this diagnosis"
+    ]
+  },
+  "timeline": [
+    {
+      "time": "2026-10-23T18:40:51Z",
+      "event": "Alert received: Error rate above 5% on frontend checkout requests"
+    },
+    {
+      "time": "2026-10-23T18:42:57.348Z",
+      "event": "Earliest cited log line from payment"
+    },
+    {
+      "time": "2026-10-23T18:47:05Z",
+      "event": "Diagnosis submitted after 5 tool calls"
+    }
+  ],
+  "prevention": "Review token validation logic or feature flag controlling token checks in payment service.",
+  "review": {
+    "ran": true,
+    "disputed": true,
+    "better_candidate": "checkout",
+    "verdict": "DISPUTED: payment\u2019s deviation_score is near zero, indicating normal behavior, while checkout shows a massive deviation and error ratio, suggesting checkout itself (or its upstream) is the real fault | better candidate: checkout",
+    "model": "openai/gpt-oss-120b"
+  },
+  "action_loop": {
+    "started_at": "2026-10-23T18:48:06Z",
+    "proposed": {
+      "action": "toggle_feature_flag",
+      "target": "payment",
+      "parameters": {},
+      "reason": "Payment service is rejecting checkout requests with 'Invalid token', causing checkout failures.",
+      "requires_approval": true
+    },
+    "mode": "interactive",
+    "dry_run": {
+      "ok": true,
+      "command": "POST http://localhost:8080/feature/api/write  (paymentFailure -> off)",
+      "effect": "Sets flag paymentFailure to 'off'. WRITE-ONLY: the Flag UI API replaces the whole flag document, so every OTHER flag returns to its default. No flag value is read to decide anything.",
+      "reversible": false,
+      "undo": "cannot restore the previous variant automatically, because we never read flag state: a failed recovery escalates to a human instead"
+    },
+    "parameters": {
+      "flag": "paymentFailure",
+      "variant": "off"
+    },
+    "approved": true,
+    "approved_by": "taruns",
+    "approved_at": "2026-10-23T18:48:06Z",
+    "before": {
+      "service": "payment",
+      "reporting": true,
+      "error_ratio": 1.0,
+      "p95_latency_ms": 4.8,
+      "deviation_score": 20.0,
+      "status_hint": "ERRORS",
+      "container_state": "running",
+      "captured_at": "2026-10-23T18:48:07Z",
+      "window_minutes": 5,
+      "pipeline_warning": null
+    },
+    "before_state": {},
+    "result": {
+      "ok": true,
+      "status_code": 200
+    },
+    "verification": {
+      "recovered": true,
+      "before": {
+        "service": "payment",
+        "reporting": true,
+        "error_ratio": 1.0,
+        "p95_latency_ms": 4.8,
+        "deviation_score": 20.0,
+        "status_hint": "ERRORS",
+        "container_state": "running",
+        "captured_at": "2026-10-23T18:48:07Z",
+        "window_minutes": 5,
+        "pipeline_warning": null
+      },
+      "after": {
+        "service": "payment",
+        "reporting": true,
+        "error_ratio": 0.0,
+        "p95_latency_ms": 3.8,
+        "deviation_score": 0.0,
+        "status_hint": "ok",
+        "container_state": "running",
+        "captured_at": "2026-10-23T18:50:08Z",
+        "window_minutes": 2,
+        "pipeline_warning": null
+      },
+      "checks": [
+        {
+          "attempt": 1,
+          "after": {
+            "service": "payment",
+            "reporting": true,
+            "error_ratio": 0.0,
+            "p95_latency_ms": 3.8,
+            "deviation_score": 0.0,
+            "status_hint": "ok",
+            "container_state": "running",
+            "captured_at": "2026-10-23T18:50:08Z",
+            "window_minutes": 2,
+            "pipeline_warning": null
+          },
+          "recovered": true,
+          "verdict": "deviation from its own baseline 20.00 -> 0.00 (error ratio 1.0000 -> 0.0000, p95 4.8 -> 3.8 ms)"
+        }
+      ],
+      "verdict": "deviation from its own baseline 20.00 -> 0.00 (error ratio 1.0000 -> 0.0000, p95 4.8 -> 3.8 ms)"
+    },
+    "outcome": "recovered and verified: deviation from its own baseline 20.00 -> 0.00 (error ratio 1.0000 -> 0.0000, p95 4.8 -> 3.8 ms)",
+    "finished_at": "2026-10-23T18:50:08Z",
+    "action_log_entries": [
+      {
+        "incident_id": "demo-payment-failure-001050",
+        "purpose": "remedy",
+        "action": "toggle_feature_flag",
+        "target": "payment",
+        "parameters": {
+          "flag": "paymentFailure",
+          "variant": "off"
+        },
+        "approved": true,
+        "approved_by": "taruns",
+        "planned": {
+          "ok": true,
+          "command": "POST http://localhost:8080/feature/api/write  (paymentFailure -> off)",
+          "effect": "Sets flag paymentFailure to 'off'. WRITE-ONLY: the Flag UI API replaces the whole flag document, so every OTHER flag returns to its default. No flag value is read to decide anything.",
+          "reversible": false,
+          "undo": "cannot restore the previous variant automatically, because we never read flag state: a failed recovery escalates to a human instead"
+        },
+        "result": {
+          "ok": true,
+          "status_code": 200
+        },
+        "logged_at": "2026-10-23T18:48:07Z"
+      }
+    ]
+  }
+}

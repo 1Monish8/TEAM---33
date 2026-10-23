@@ -62,7 +62,34 @@ CALIBRATION_PLACEHOLDER
 
 ## 5. The action loop (Checkpoint 3), tested live
 
-LOOP_PLACEHOLDER
+Every path the Day 2 plan asks a mentor to see was run live on the full stack (`reports/demo/`, `action_log.jsonl`):
+
+| Path | Incident | What happened | Result |
+|---|---|---|---|
+| Approve → act → verify | `currency-stopped` | Diagnosed `currency` (service down). Reviewer disputed. Dry run `docker restart currency`. Human typed `y`. Acted. Waited 120 s. "currency was not reporting; now reporting with error ratio 0.0000". | ✅ **recovered and verified**, 1 approved action logged |
+| Write-only flag fix + hallucination guard | `payment-failure` with `--demo-hallucination` | The planted `trace-9999` was **rejected by the guard** and the model resubmitted with real refs. Diagnosed `payment`. The agent asked the human for the flag's name; human typed `paymentFailure`, then `y`. Flag written. Payment deviation **20.00 → 0.00**, error ratio **1.0000 → 0.0000**. | ✅ **recovered and verified** |
+| Human says no | `currency-stopped` | Same proposal; human typed `n` | ✅ "rejected by the human: no change was made", logged |
+| Kill switch mid-run | `currency-stopped` | `touch KILL_SWITCH` 40 s into the investigation | ✅ "KILL_SWITCH present: stopping the investigation", automatic escalation, **0 actions** in the log |
+
+Offline, `tests/test_offline.py` (19 tests, no stack, no LLM) proves the same gates every run:
+- reject;
+- dry run;
+- low confidence or an escalation never acts;
+- kill switch;
+- verified recovery;
+- rollback on failed recovery;
+- the hallucination demo;
+- refusals without approval;
+- a rejected tool call never crashes the run;
+- only a grounded reviewer dispute lowers confidence.
+
+### Bugs the live runs found, and the fixes (all committed)
+1. **Victims ranked as "down".** With `currency` stopped, `payment` and `fraud-detection` went silent because nothing called them, and were ranked as the top suspects. The fix uses Docker to tell them apart: stopped container = **DOWN** (rank 10); running but silent = **IDLE** (a victim, rank 0.5).
+2. **A rounding bug hid a failing service.** `payment` runs at about 0.04 req/s; rounding the rate to 1 decimal made it look silent despite 57% errors. Rates now keep 4 decimals, and errors always outrank "silent".
+3. **Sparse-traffic latency noise.** A p95 from a handful of spans read as a 499× slowdown. Latency only counts at ≥ 0.1 req/s and is capped.
+4. **Groq HTTP 400 "Tool call validation failed"** (the model called a tool named `json` that doesn't exist) **crashed a run.** It's now fed back to the model with the list of real tools, and the run continues.
+5. **The reviewer disputed every correct diagnosis with speculation** ("maybe the token is wrong upstream, better candidate: none"). A dispute now lowers confidence only when **grounded**: it must name a known service that moved at least as far from its own baseline. Speculative disputes are recorded but not applied.
+6. **The fallback model was too eager.** A per-minute burst switched a whole sweep to the smaller model. Now it switches only on a **daily** cap, and returns to the primary after the cool-down.
 
 ## 6. What still doesn't work, and why
 - **Kafka incidents** (`kafka-queue-problems`): consumer lag isn't a metric our tools read, so the agent depends on fraud-detection and accounting traces. This is our weakest class.

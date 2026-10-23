@@ -1,0 +1,100 @@
+{
+  "incident_id": "killswitch-test",
+  "generated_at": "2026-10-23T19:02:27Z",
+  "alert": "Error rate elevated on frontend",
+  "status": "escalated",
+  "root_cause": {
+    "service": null,
+    "fault_type": "unknown",
+    "summary": "Automatic escalation: no accepted diagnosis within the iteration/rejection budget. The cited items are the most suspicious signals the tools returned; a human should take over."
+  },
+  "symptom_services": [],
+  "confidence": 0.2,
+  "confidence_label": "low",
+  "evidence": [
+    {
+      "service": "currency",
+      "metric": "container_state",
+      "value": "exited",
+      "promql": "docker inspect currency (State.Status)",
+      "timestamp": "2026-10-23T19:01:26Z",
+      "deviation_score": 10.0,
+      "reference": "metric-1",
+      "kind": "metric"
+    },
+    {
+      "service": "frontend",
+      "metric": "error_ratio",
+      "value": 0.0962,
+      "promql": "sum by (service_name) (rate(traces_span_metrics_calls_total{status_code=\"STATUS_CODE_ERROR\"}[5m])) / sum by (service_name) (rate(traces_span_metrics_calls_total[5m]))",
+      "timestamp": "2026-10-23T19:01:26Z",
+      "baseline": 0.0,
+      "deviation_score": 1.924,
+      "reference": "metric-2",
+      "kind": "metric"
+    },
+    {
+      "service": "checkout",
+      "metric": "error_ratio",
+      "value": 0.1111,
+      "promql": "sum by (service_name) (rate(traces_span_metrics_calls_total{status_code=\"STATUS_CODE_ERROR\"}[5m])) / sum by (service_name) (rate(traces_span_metrics_calls_total[5m]))",
+      "timestamp": "2026-10-23T19:01:26Z",
+      "baseline": 0.032,
+      "deviation_score": 1.582,
+      "reference": "metric-3",
+      "kind": "metric"
+    },
+    {
+      "service": "frontend-proxy",
+      "metric": "error_ratio",
+      "value": 0.0656,
+      "promql": "sum by (service_name) (rate(traces_span_metrics_calls_total{status_code=\"STATUS_CODE_ERROR\"}[5m])) / sum by (service_name) (rate(traces_span_metrics_calls_total[5m]))",
+      "timestamp": "2026-10-23T19:01:26Z",
+      "baseline": 0.0002,
+      "deviation_score": 1.308,
+      "reference": "metric-4",
+      "kind": "metric"
+    }
+  ],
+  "proposed_action": {
+    "action": "escalate_to_human",
+    "target": null,
+    "parameters": {},
+    "reason": "The agent could not reach a confident, evidence-backed diagnosis.",
+    "requires_approval": true
+  },
+  "investigation": {
+    "tool_calls": 2,
+    "tools_used": [
+      "get_service_health",
+      "search_traces"
+    ],
+    "model": "openai/gpt-oss-120b",
+    "duration_seconds": 62.2,
+    "calibration_notes": []
+  },
+  "timeline": [
+    {
+      "time": "2026-10-23T19:01:25Z",
+      "event": "Alert received: Error rate elevated on frontend"
+    },
+    {
+      "time": "2026-10-23T19:02:27Z",
+      "event": "Diagnosis submitted after 2 tool calls"
+    }
+  ],
+  "action_loop": {
+    "started_at": "2026-10-23T19:02:27Z",
+    "proposed": {
+      "action": "escalate_to_human",
+      "target": null,
+      "parameters": {},
+      "reason": "The agent could not reach a confident, evidence-backed diagnosis.",
+      "requires_approval": true
+    },
+    "mode": "interactive",
+    "outcome": "escalated to a human, no action: the agent was not confident enough to propose a change",
+    "finished_at": "2026-10-23T19:02:27Z",
+    "action_log_entries": []
+  }
+}

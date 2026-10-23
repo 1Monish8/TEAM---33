@@ -1,0 +1,67 @@
+==> pre-flight
+PASS  demo containers running            28/28 running
+PASS  web store (frontend-proxy :8080)   HTTP 200
+PASS  span metrics fresh in Prometheus   newest sample 49s old
+PASS  container metrics fresh            newest sample 8s old
+PASS  Jaeger v3 API                      20 services reporting traces
+PASS  OpenSearch logs                    http://localhost:53611 (otel-logs-2026-10-23)
+PASS  no KILL_SWITCH file                absent
+PASS  no practice fault left injected    none
+PASS  LLM key configured                 model openai/gpt-oss-120b, fallback openai/gpt-oss-20b
+
+ALL GREEN
+==> inject payment-failure, then wait 120 s (Prometheus scrapes and SDKs export every 60 s, so metrics lag the fault)
+injected payment-failure
+==> agent: "Error rate above 5% on frontend checkout requests"
+  [0] get_service_health({"window_minutes": 5}) 0.5s
+  pacing: 2843 tokens used in the last minute, waiting 60s
+  [1] search_traces({"limit": 5, "only_errors": true, "service": "checkout", "window_minutes": 5}) 0.3s
+  pacing: 4245 tokens used in the last minute, waiting 60s
+  [2] get_container_health({"window_minutes": 5}) 0.3s
+  pacing: 5193 tokens used in the last minute, waiting 60s
+  [3] search_logs({"limit": 10, "min_severity": "WARN", "service": "payment", "window_minutes": 5}) 1.0s
+  pacing: 4369 tokens used in the last minute, waiting 59s
+  [4] get_trace({"trace_id": "8ea7bce9efe7a48774778dd29378dc56"}) 0.1s
+  pacing: 4272 tokens used in the last minute, waiting 60s
+  [demo] planted a fake evidence reference in the submission: trace-9999
+  submit_diagnosis rejected: These evidence references were not returned by any tool in this run: trace-9999. Resubmit citing only refs you actually received.
+  pacing: 5454 tokens used in the last minute, waiting 60s
+  pacing: 5691 tokens used in the last minute, waiting 60s
+wrote reports/demo/demo-payment-failure-001050
+
+--- DIAGNOSIS ---
+  root cause : payment (application_error), confidence medium 0.60
+  summary    : The payment service is returning an 'Invalid token' error for checkout requests, causing the checkout endpoint to fail and surface a >5% error rate to users.
+  evidence   : metric-1, trace-8, log-7
+  reviewer   : DISPUTED: payment’s deviation_score is near zero, indicating normal behavior, while checkout shows a massive deviation and error ratio, suggesting checkout itself (or its upstream) is the real fault |
+--- PROPOSED ACTION (dry run: nothing has changed yet) ---
+  action : toggle_feature_flag on payment 
+  reason : Payment service is rejecting checkout requests with 'Invalid token', causing checkout failures.
+  would  : toggle_feature_flag needs the flag's name from the on-call human: the agent never reads flag configuration, so it cannot know which flag belongs to payment
+  undo   : n/a
+  The agent never reads flag configuration. Name the flag to set for payment (blank = cancel):   would  : Sets flag paymentFailure to 'off'. WRITE-ONLY: the Flag UI API replaces the whole flag document, so every OTHER flag returns to its default. No flag value is read to decide anything.
+
+  Approve this action? [y/N]   acting : POST http://localhost:8080/feature/api/write  (paymentFailure -> off)
+  waiting 120s for fresh metrics before verification check 1 (Prometheus lags up to ~2 min)
+  verification check 1: deviation from its own baseline 20.00 -> 0.00 (error ratio 1.0000 -> 0.0000, p95 4.8 -> 3.8 ms)
+  OUTCOME: recovered and verified: deviation from its own baseline 20.00 -> 0.00 (error ratio 1.0000 -> 0.0000, p95 4.8 -> 3.8 ms)
+updated reports/demo/demo-payment-failure-001050 with the action loop
+
+==> report: reports/demo/demo-payment-failure-001050/report.md
+## Action loop (dry run → human approval → act → verify → roll back)
+
+- **Outcome:** recovered and verified: deviation from its own baseline 20.00 -> 0.00 (error ratio 1.0000 -> 0.0000, p95 4.8 -> 3.8 ms)
+- **Mode:** interactive
+- **Dry run:** Sets flag paymentFailure to 'off'. WRITE-ONLY: the Flag UI API replaces the whole flag document, so every OTHER flag returns to its default. No flag value is read to decide anything.
+- **Command:** `POST http://localhost:8080/feature/api/write  (paymentFailure -> off)`
+- **Approved:** yes, by taruns at 2026-10-23T18:48:06Z
+- **Executed:** ok
+- **Verification:** RECOVERED — deviation from its own baseline 20.00 -> 0.00 (error ratio 1.0000 -> 0.0000, p95 4.8 -> 3.8 ms)
+  - check 1: deviation from its own baseline 20.00 -> 0.00 (error ratio 1.0000 -> 0.0000, p95 4.8 -> 3.8 ms)
+- **Action log (`action_log.jsonl`):** 1 entry for this incident
+  - 2026-10-23T18:48:07Z · remedy toggle_feature_flag on `payment` · approved=True · ok
+
+==> action log entries for this run (action_log.jsonl):
+   2026-10-23T18:48:07Z remedy toggle_feature_flag payment approved=True ok=True
+==> practice fault reset
+EXIT=0

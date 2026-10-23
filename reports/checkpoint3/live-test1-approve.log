@@ -1,0 +1,60 @@
+==> pre-flight
+PASS  demo containers running            28/28 running
+PASS  web store (frontend-proxy :8080)   HTTP 200
+PASS  span metrics fresh in Prometheus   newest sample 83s old
+PASS  container metrics fresh            newest sample 2s old
+PASS  Jaeger v3 API                      20 services reporting traces
+PASS  OpenSearch logs                    http://localhost:53611 (otel-logs-2026-10-23)
+PASS  no KILL_SWITCH file                absent
+PASS  no practice fault left injected    none
+PASS  LLM key configured                 model openai/gpt-oss-120b, fallback openai/gpt-oss-20b
+
+ALL GREEN
+==> inject currency-stopped, then wait 120 s (Prometheus scrapes and SDKs export every 60 s, so metrics lag the fault)
+injected currency-stopped
+==> agent: "Error rate elevated on frontend"
+  [0] get_service_health({"window_minutes": 5}) 0.2s
+  pacing: 2811 tokens used in the last minute, waiting 60s
+  [1] search_traces({"limit": 5, "only_errors": true, "service": "frontend", "window_minutes": 5}) 0.2s
+  pacing: 4208 tokens used in the last minute, waiting 60s
+  [2] search_traces({"limit": 5, "only_errors": true, "service": "currency", "window_minutes": 5}) 0.2s
+  pacing: 5111 tokens used in the last minute, waiting 60s
+  [3] get_container_health({"window_minutes": 5}) 0.2s
+  pacing: 4046 tokens used in the last minute, waiting 60s
+wrote reports/demo/demo-currency-stopped-235925
+
+--- DIAGNOSIS ---
+  root cause : currency (service_down), confidence medium 0.60
+  summary    : The currency microservice is down (container exited), causing checkout's calls to fail. These failures propagate up, raising the error rate observed in the frontend service.
+  evidence   : metric-9, trace-4
+  reviewer   : DISPUTED: the conclusion ignores that the services with the largest deviation scores are payment and fraud‑detection (both 10.0), while currency isn’t even listed as deviating, suggesting it isn’t the
+--- PROPOSED ACTION (dry run: nothing has changed yet) ---
+  action : restart_service on currency 
+  reason : Currency service container is exited (NOT_RUNNING), causing checkout failures and elevated frontend error rate.
+  would  : Container currency stops and starts (or starts, if it was stopped). Requests to it fail for a few seconds; in-memory state (caches, leaked memory) is cleared.
+  undo   : none needed: a restart changes no configuration
+
+  Approve this action? [y/N]   acting : docker restart currency
+  waiting 120s for fresh metrics before verification check 1 (Prometheus lags up to ~2 min)
+  verification check 1: currency was not reporting; now reporting with error ratio 0.0000
+  OUTCOME: recovered and verified: currency was not reporting; now reporting with error ratio 0.0000
+updated reports/demo/demo-currency-stopped-235925 with the action loop
+
+==> report: reports/demo/demo-currency-stopped-235925/report.md
+## Action loop (dry run → human approval → act → verify → roll back)
+
+- **Outcome:** recovered and verified: currency was not reporting; now reporting with error ratio 0.0000
+- **Mode:** interactive
+- **Dry run:** Container currency stops and starts (or starts, if it was stopped). Requests to it fail for a few seconds; in-memory state (caches, leaked memory) is cleared.
+- **Command:** `docker restart currency`
+- **Approved:** yes, by taruns at 2026-10-23T18:33:35Z
+- **Executed:** ok
+- **Verification:** RECOVERED — currency was not reporting; now reporting with error ratio 0.0000
+  - check 1: currency was not reporting; now reporting with error ratio 0.0000
+- **Action log (`action_log.jsonl`):** 1 entry for this incident
+  - 2026-10-23T18:33:35Z · remedy restart_service on `currency` · approved=True · ok
+
+==> action log entries for this run (action_log.jsonl):
+   2026-10-23T18:33:35Z remedy restart_service currency approved=True ok=True
+==> practice fault reset
+EXIT=0
