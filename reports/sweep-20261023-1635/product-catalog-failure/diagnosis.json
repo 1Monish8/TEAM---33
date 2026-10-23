@@ -1,0 +1,81 @@
+{
+  "incident_id": "product-catalog-failure",
+  "generated_at": "2026-10-23T11:21:56Z",
+  "alert": "Error rate elevated on frontend product pages",
+  "status": "diagnosed",
+  "root_cause": {
+    "service": "product-catalog",
+    "fault_type": "application_error",
+    "summary": "The product-catalog service's GetProduct operation is failing, likely due to a recent feature flag change that triggers an exception. This propagates up as errors on the frontend product pages."
+  },
+  "symptom_services": [
+    "frontend",
+    "frontend-proxy",
+    "frontend-web"
+  ],
+  "confidence": 0.6,
+  "confidence_label": "medium",
+  "evidence": [
+    {
+      "trace_id": "8eef8ec4070576e3e91016646a32722a",
+      "service": "product-catalog",
+      "span_name": "oteldemo.ProductCatalogService/GetProduct",
+      "duration_ms": 3.8,
+      "status": "ERROR",
+      "exception": "[redacted by tool layer: text referenced a feature flag]",
+      "reference": "trace-4",
+      "kind": "trace",
+      "why_it_matters": "Deepest failing span is product-catalog GetProduct, indicating the error originates there"
+    },
+    {
+      "trace_id": "f17d2750a978b94c79812b0be90288a3",
+      "service": "product-catalog",
+      "span_name": "oteldemo.ProductCatalogService/GetProduct",
+      "duration_ms": 12.7,
+      "status": "ERROR",
+      "exception": "[redacted by tool layer: text referenced a feature flag]",
+      "reference": "trace-6",
+      "kind": "trace",
+      "why_it_matters": "Consistent deepest failing span in product-catalog across multiple traces"
+    },
+    {
+      "service": "accounting",
+      "metric": "p95_latency_ms",
+      "value": 15000.0,
+      "promql": "histogram_quantile(0.95, sum by (service_name, le) (rate(traces_span_metrics_duration_milliseconds_bucket[5m])))",
+      "timestamp": "2026-10-23T11:20:23Z",
+      "reference": "metric-3",
+      "kind": "metric",
+      "why_it_matters": "No resource issues reported for product-catalog, pointing to application logic rather than infra"
+    }
+  ],
+  "proposed_action": {
+    "action": "toggle_feature_flag",
+    "target": "product-catalog",
+    "reason": "Feature flag causing exceptions in product-catalog GetProduct calls",
+    "requires_approval": true
+  },
+  "investigation": {
+    "tool_calls": 7,
+    "tools_used": [
+      "get_container_health",
+      "get_service_health",
+      "search_logs",
+      "search_traces"
+    ],
+    "model": "openai/gpt-oss-120b",
+    "duration_seconds": 94.6,
+    "calibration_notes": []
+  },
+  "timeline": [
+    {
+      "time": "2026-10-23T11:20:22Z",
+      "event": "Alert received: Error rate elevated on frontend product pages"
+    },
+    {
+      "time": "2026-10-23T11:21:56Z",
+      "event": "Diagnosis submitted after 7 tool calls"
+    }
+  ],
+  "prevention": "Ensure feature flag changes are tested and rolled back if they cause errors"
+}

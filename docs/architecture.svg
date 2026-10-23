@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 700" font-family="Helvetica, Arial, sans-serif" font-size="13">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#444"/>
+    </marker>
+    <style>
+      .box{fill:#fff;stroke:#333;stroke-width:1.5;rx:8}
+      .core{fill:#e8f0fe;stroke:#1a56db;stroke-width:2}
+      .data{fill:#f3f4f6;stroke:#6b7280}
+      .guard{fill:#fef3c7;stroke:#b45309}
+      .day2{fill:#f3f4f6;stroke:#9ca3af;stroke-dasharray:6 4}
+      .t{font-weight:bold;font-size:14px}
+      .s{fill:#4b5563;font-size:12px}
+      .g{fill:#9ca3af}
+      .line{stroke:#444;stroke-width:1.4;fill:none;marker-end:url(#arrow)}
+      .dash{stroke:#9ca3af;stroke-width:1.4;fill:none;stroke-dasharray:6 4;marker-end:url(#arrow)}
+    </style>
+  </defs>
+  <text x="500" y="32" text-anchor="middle" font-size="20" font-weight="bold">Incident Zero — AI on-call agent (Day 1 architecture)</text>
+
+  <!-- alert in -->
+  <rect class="box" x="40" y="70" width="210" height="70" rx="8"/>
+  <text class="t" x="145" y="98" text-anchor="middle">Alert in</text>
+  <text class="s" x="145" y="118" text-anchor="middle">CLI text · --watch thresholds</text>
+  <text class="s" x="145" y="133" text-anchor="middle">· harness: diagnose(alert)</text>
+
+  <!-- agent loop -->
+  <rect class="box core" x="310" y="60" width="380" height="150" rx="10"/>
+  <text class="t" x="500" y="86" text-anchor="middle">agent.py — tool-calling loop (Groq gpt-oss-120b)</text>
+  <text class="s" x="500" y="108" text-anchor="middle">system prompt = investigation cascade (prompts/system_prompt.md)</text>
+  <text class="s" x="500" y="126" text-anchor="middle">1 metrics → 2 traces: deepest failing span → 3 logs</text>
+  <text class="s" x="500" y="144" text-anchor="middle">latency / silent service → container health + slow spans</text>
+  <text class="s" x="500" y="162" text-anchor="middle">one tool per step · max 14 iterations · every call logged</text>
+  <text class="s" x="500" y="180" text-anchor="middle">transcript.jsonl = action log</text>
+  <text class="s" x="500" y="198" text-anchor="middle">ends ONLY via submit_diagnosis(...)</text>
+
+  <!-- guard -->
+  <rect class="box guard" x="740" y="60" width="220" height="150" rx="10"/>
+  <text class="t" x="850" y="86" text-anchor="middle">submit_diagnosis guard</text>
+  <text class="s" x="850" y="108" text-anchor="middle">evidence registry: every cited</text>
+  <text class="s" x="850" y="124" text-anchor="middle">ref must be one a tool returned</text>
+  <text class="s" x="850" y="146" text-anchor="middle">calibration: high needs ≥2 kinds</text>
+  <text class="s" x="850" y="162" text-anchor="middle">(trace/log/metric) on same service</text>
+  <text class="s" x="850" y="184" text-anchor="middle">jsonschema validate → or reject</text>
+  <text class="s" x="850" y="200" text-anchor="middle">back to the model to resubmit</text>
+
+  <path class="line" d="M250,105 L310,105"/>
+  <path class="line" d="M690,120 L740,120"/>
+  <path class="line" d="M740,170 C715,190 715,190 690,180"/>
+
+  <!-- tools -->
+  <rect class="box" x="60" y="270" width="880" height="120" rx="10"/>
+  <text class="t" x="500" y="294" text-anchor="middle">tools.py — pure Python, no LLM; capped, flattened, flag-redacted JSON; each item carries a ref</text>
+  <g class="s">
+    <text x="85" y="324">get_service_health()</text><text x="85" y="340">error ratio · rps · p95 · NOT_REPORTING</text>
+    <text x="340" y="324">search_traces(service, …)</text><text x="340" y="340">get_trace(id) → spans + deepest failing</text>
+    <text x="600" y="324">search_logs(service, …)</text><text x="600" y="340">time window + severity filter</text>
+    <text x="85" y="370">get_container_health()</text><text x="235" y="370">cpu · mem% · uptime resets · stopped</text>
+    <text x="600" y="370">get_deploy_history() · list_services()</text>
+  </g>
+  <path class="line" d="M500,210 L500,270"/>
+
+  <!-- data -->
+  <rect class="box data" x="60" y="440" width="250" height="70" rx="8"/>
+  <text class="t" x="185" y="468" text-anchor="middle">Prometheus :9090</text>
+  <text class="s" x="185" y="488" text-anchor="middle">span metrics (RED) + docker_stats</text>
+  <rect class="box data" x="375" y="440" width="250" height="70" rx="8"/>
+  <text class="t" x="500" y="468" text-anchor="middle">Jaeger :8080/jaeger/ui</text>
+  <text class="s" x="500" y="488" text-anchor="middle">traces (in-memory, never restart)</text>
+  <rect class="box data" x="690" y="440" width="250" height="70" rx="8"/>
+  <text class="t" x="815" y="468" text-anchor="middle">OpenSearch (ephemeral port)</text>
+  <text class="s" x="815" y="488" text-anchor="middle">otel-logs-* · port via docker compose</text>
+  <path class="line" d="M185,390 L185,440"/><path class="line" d="M500,390 L500,440"/><path class="line" d="M815,390 L815,440"/>
+  <text class="s" x="500" y="532" text-anchor="middle">OpenTelemetry Demo (Astronomy Shop) → OTel Collector → the three backends · flagd / Flag UI are never queried</text>
+
+  <!-- report out -->
+  <rect class="box" x="40" y="580" width="260" height="80" rx="8"/>
+  <text class="t" x="170" y="606" text-anchor="middle">Report out</text>
+  <text class="s" x="170" y="626" text-anchor="middle">diagnosis.json (schema-valid)</text>
+  <text class="s" x="170" y="642" text-anchor="middle">report.md (human readable)</text>
+  <path class="line" d="M960,150 L985,150 L985,552 L170,552 L170,580"/>
+  <text class="s" x="980" y="420" text-anchor="end">accepted</text>
+
+  <!-- day 2 -->
+  <rect class="box day2" x="360" y="580" width="180" height="80" rx="8"/>
+  <text class="t g" x="450" y="606" text-anchor="middle">Human approval</text>
+  <text class="s g" x="450" y="626" text-anchor="middle">y/N gate, dry-run</text>
+  <text class="s g" x="450" y="644" text-anchor="middle">DAY 2</text>
+  <rect class="box day2" x="570" y="580" width="180" height="80" rx="8"/>
+  <text class="t g" x="660" y="606" text-anchor="middle">Action API</text>
+  <text class="s g" x="660" y="626" text-anchor="middle">allowlisted remedy + verify</text>
+  <text class="s g" x="660" y="644" text-anchor="middle">DAY 2</text>
+  <rect class="box day2" x="780" y="580" width="180" height="80" rx="8"/>
+  <text class="t g" x="870" y="606" text-anchor="middle">Kill switch</text>
+  <text class="s g" x="870" y="626" text-anchor="middle">KILL_SWITCH file (loop checks)</text>
+  <text class="s g" x="870" y="644" text-anchor="middle">DAY 2: also blocks actions</text>
+  <path class="dash" d="M300,620 L360,620"/><path class="dash" d="M540,620 L570,620"/>
+</svg>

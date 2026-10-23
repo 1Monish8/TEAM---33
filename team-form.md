@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Team name | TEAM-33 |
-| Members | Tarun, Devaki, Monish, Sanjana N, _Member 5_ (each member confirms their own name in their own commit) |
+| Members | Tarun, Devaki, Monish, Sanjana N, Afrah (each member confirms their own name in their own commit) |
 
 ## Who built which part
 
@@ -13,7 +13,7 @@
 | Tools | `tools.py` | Devaki |
 | Loop | `agent.py`, `prompts/system_prompt.md`, `llm.py`, `smoke_test_llm.py` | Tarun |
 | Output | `schema.json`, `report.py`, `examples/`, `tests/` | Sanjana N |
-| Evidence | `run_all.py`, `reports/`, `evaluation-note.md`, `docs/` | _Member 5_ |
+| Evidence | `run_all.py`, `reports/`, `evaluation-note.md`, `docs/` | Afrah |
 
 Full split, interview prep and git commands: `docs/TEAM_SPLIT.md`.
 

@@ -1,0 +1,196 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 1010" font-family="Helvetica, Arial, sans-serif" font-size="13">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#374151"/></marker>
+    <marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#b91c1c"/></marker>
+    <style>
+      .b{fill:#fff;stroke:#374151;stroke-width:1.5}
+      .core{fill:#e8f0fe;stroke:#1a56db;stroke-width:2}
+      .tool{fill:#ecfdf5;stroke:#047857;stroke-width:1.5}
+      .data{fill:#f3f4f6;stroke:#6b7280;stroke-width:1.5}
+      .guard{fill:#fef3c7;stroke:#b45309;stroke-width:2}
+      .out{fill:#fdf2f8;stroke:#9d174d;stroke-width:1.5}
+      .esc{fill:#fff7ed;stroke:#c2410c;stroke-width:1.5}
+      .day2{fill:#f9fafb;stroke:#9ca3af;stroke-width:1.5;stroke-dasharray:6 4}
+      .t{font-weight:bold;font-size:14px}
+      .s{fill:#374151;font-size:12px}
+      .g{fill:#9ca3af}
+      .h{font-weight:bold;font-size:16px;fill:#111827}
+      .l{stroke:#374151;stroke-width:1.5;fill:none;marker-end:url(#a)}
+      .rl{stroke:#b91c1c;stroke-width:1.5;fill:none;marker-end:url(#r);stroke-dasharray:5 3}
+      .dl{stroke:#9ca3af;stroke-width:1.5;fill:none;marker-end:url(#a);stroke-dasharray:6 4}
+      .lab{font-size:11px;fill:#374151}
+      .rlab{font-size:11px;fill:#b91c1c}
+    </style>
+  </defs>
+
+  <text x="700" y="30" text-anchor="middle" font-size="21" font-weight="bold">TEAM-33 · How one investigation runs</text>
+  <text x="390" y="62" text-anchor="middle" class="h">Runtime loop (agent.py, tools.py, llm.py, report.py)</text>
+  <text x="1085" y="62" text-anchor="middle" class="h">Investigation policy (prompts/system_prompt.md)</text>
+  <line x1="775" y1="50" x2="775" y2="990" stroke="#d1d5db" stroke-width="1.5"/>
+
+  <!-- ===================== LEFT: runtime ===================== -->
+  <rect class="b" x="190" y="80" width="400" height="70" rx="8"/>
+  <text class="t" x="390" y="102" text-anchor="middle">1 · Alert in</text>
+  <text class="s" x="390" y="121" text-anchor="middle">python agent.py "Error rate above 5% on frontend"</text>
+  <text class="s" x="390" y="138" text-anchor="middle">or --watch (polls health) · or diagnose(alert) for a harness</text>
+  <path class="l" d="M390,150 L390,180"/>
+
+  <rect class="core" x="190" y="180" width="400" height="62" rx="8"/>
+  <text class="t" x="390" y="203" text-anchor="middle">2 · agent.py · run_investigation()</text>
+  <text class="s" x="390" y="223" text-anchor="middle">empty evidence registry · messages = system prompt + alert</text>
+  <path class="l" d="M390,242 L390,272"/>
+
+  <rect class="core" x="190" y="272" width="400" height="72" rx="8"/>
+  <text class="t" x="390" y="295" text-anchor="middle">3 · llm.py → Groq openai/gpt-oss-120b</text>
+  <text class="s" x="390" y="314" text-anchor="middle">chooses ONE next tool from what it has seen so far</text>
+  <text class="s" x="390" y="331" text-anchor="middle">network drop → wait and retry (5 s … 90 s)</text>
+  <path class="l" d="M390,344 L390,368"/>
+
+  <polygon class="b" points="390,368 510,408 390,448 270,408"/>
+  <text class="t" x="390" y="404" text-anchor="middle">4 · what did it ask for?</text>
+  <text class="s" x="390" y="422" text-anchor="middle">a tool, or the final answer</text>
+  <path class="l" d="M270,408 L200,408 L200,470"/><text class="lab" x="205" y="400">a telemetry tool</text>
+  <path class="l" d="M510,408 L580,408 L580,470"/><text class="lab" x="520" y="400">submit_diagnosis</text>
+
+  <!-- tool branch -->
+  <rect class="tool" x="40" y="470" width="320" height="76" rx="8"/>
+  <text class="t" x="200" y="492" text-anchor="middle">5 · tools.py runs the tool</text>
+  <text class="s" x="200" y="511" text-anchor="middle">7 plain Python functions · no LLM inside</text>
+  <text class="s" x="200" y="528" text-anchor="middle">a crash becomes {"error": …}, never kills the run</text>
+  <path class="l" d="M200,546 L200,572"/>
+
+  <rect class="data" x="40" y="572" width="320" height="104" rx="8"/>
+  <text class="t" x="200" y="593" text-anchor="middle">6 · real telemetry</text>
+  <text class="s" x="200" y="612" text-anchor="middle">Prometheus: error ratio · p95 · container cpu/mem/uptime</text>
+  <text class="s" x="200" y="629" text-anchor="middle">Jaeger v3: traces → deepest failing span</text>
+  <text class="s" x="200" y="646" text-anchor="middle">OpenSearch: log lines for one service + window</text>
+  <text class="s" x="200" y="663" text-anchor="middle">Docker engine: stopped · OOM · restarts · CPU limit</text>
+  <path class="l" d="M200,676 L200,702"/>
+
+  <rect class="tool" x="40" y="702" width="320" height="100" rx="8"/>
+  <text class="t" x="200" y="724" text-anchor="middle">7 · summarise + register</text>
+  <text class="s" x="200" y="743" text-anchor="middle">cap 15 items · 300 chars · one line per span</text>
+  <text class="s" x="200" y="760" text-anchor="middle">redact anything naming a feature flag (rule 6)</text>
+  <text class="s" x="200" y="777" text-anchor="middle">every item gets a ref: metric-2 · trace-5 · log-10</text>
+  <text class="s" x="200" y="794" text-anchor="middle">stored in the evidence registry</text>
+  <path class="l" d="M40,752 L18,752 L18,308 L190,308"/>
+  <text class="lab" x="34" y="520" transform="rotate(-90 34 520)" text-anchor="middle">result appended · written to transcript.jsonl · KILL_SWITCH checked · max 14 steps</text>
+
+  <!-- submit branch -->
+  <rect class="guard" x="420" y="470" width="320" height="176" rx="8"/>
+  <text class="t" x="580" y="492" text-anchor="middle">8 · submit_diagnosis guard (in code)</text>
+  <text class="s" x="432" y="516">① every cited ref was returned by a tool</text>
+  <text class="s" x="448" y="532">in THIS run (else: invented → reject)</text>
+  <text class="s" x="432" y="555">② "diagnosed" must cite evidence about</text>
+  <text class="s" x="448" y="571">the named service</text>
+  <text class="s" x="432" y="594">③ high needs ≥2 kinds (trace/log/metric)</text>
+  <text class="s" x="448" y="610">else capped 0.70 · escalated ≤ 0.45</text>
+  <text class="s" x="432" y="633">④ jsonschema-valid against schema.json</text>
+  <path class="rl" d="M740,540 L762,540 L762,322 L590,322"/>
+  <text class="rlab" x="756" y="358" text-anchor="end">rejected → reason sent back, model resubmits (max 3)</text>
+  <path class="l" d="M580,646 L580,676"/><text class="lab" x="588" y="666">accepted</text>
+
+  <rect class="out" x="420" y="676" width="320" height="96" rx="8"/>
+  <text class="t" x="580" y="698" text-anchor="middle">9 · output (report.py)</text>
+  <text class="s" x="580" y="718" text-anchor="middle">diagnosis.json: schema-valid, what gets scored</text>
+  <text class="s" x="580" y="736" text-anchor="middle">report.md: readable, for the human approver</text>
+  <text class="s" x="580" y="754" text-anchor="middle">transcript.jsonl: every tool call = action log</text>
+
+  <rect class="esc" x="420" y="796" width="320" height="52" rx="8" stroke-dasharray="5 3"/>
+  <text class="s" x="580" y="817" text-anchor="middle">budget used up / 3 rejections → automatic</text>
+  <text class="s" x="580" y="834" text-anchor="middle">ESCALATION, still valid JSON (never a crash)</text>
+  <path class="l" d="M580,796 L580,772"/>
+
+  <!-- day 2 -->
+  <text class="t g" x="390" y="980" text-anchor="middle">Day 2: designed, not built yet</text>
+  <rect class="day2" x="40" y="892" width="210" height="64" rx="8"/>
+  <text class="s g" x="145" y="918" text-anchor="middle">human approval y/N</text>
+  <text class="s g" x="145" y="936" text-anchor="middle">dry-run · logged</text>
+  <rect class="day2" x="285" y="892" width="210" height="64" rx="8"/>
+  <text class="s g" x="390" y="918" text-anchor="middle">Action API</text>
+  <text class="s g" x="390" y="936" text-anchor="middle">allowlisted remedy only</text>
+  <rect class="day2" x="530" y="892" width="210" height="64" rx="8"/>
+  <text class="s g" x="635" y="918" text-anchor="middle">verify recovery with health</text>
+  <text class="s g" x="635" y="936" text-anchor="middle">tools · else roll back</text>
+  <path class="dl" d="M250,924 L285,924"/><path class="dl" d="M495,924 L530,924"/>
+  <path class="dl" d="M420,760 L400,760 L400,870 L145,870 L145,892"/>
+
+  <!-- ===================== RIGHT: policy ===================== -->
+  <rect class="tool" x="935" y="80" width="300" height="62" rx="8"/>
+  <text class="t" x="1085" y="102" text-anchor="middle">A · get_service_health (always first)</text>
+  <text class="s" x="1085" y="122" text-anchor="middle">one query, every service: errors · p95 · silent</text>
+  <path class="l" d="M1085,142 L1085,162"/>
+
+  <polygon class="b" points="1085,162 1185,197 1085,232 985,197"/>
+  <text class="t" x="1085" y="202" text-anchor="middle">what is wrong?</text>
+  <path class="l" d="M985,197 L930,197 L930,262"/><text class="lab" x="905" y="190">errors</text>
+  <path class="l" d="M1185,197 L1240,197 L1240,262"/><text class="lab" x="1192" y="190">latency only / service silent</text>
+
+  <rect class="tool" x="800" y="262" width="260" height="66" rx="8"/>
+  <text class="t" x="930" y="284" text-anchor="middle">B · search_traces</text>
+  <text class="s" x="930" y="302" text-anchor="middle">on the service with the HIGHEST</text>
+  <text class="s" x="930" y="318" text-anchor="middle">error ratio (busy services dilute it)</text>
+  <path class="l" d="M930,328 L930,350"/>
+
+  <rect class="tool" x="800" y="350" width="260" height="82" rx="8"/>
+  <text class="t" x="930" y="372" text-anchor="middle">C · get_trace</text>
+  <text class="s" x="930" y="390" text-anchor="middle">deepest failing span whose own</text>
+  <text class="s" x="930" y="406" text-anchor="middle">children did not fail = the culprit</text>
+  <text class="s" x="930" y="422" text-anchor="middle">(computed in code, ranked by depth)</text>
+  <path class="l" d="M930,432 L930,454"/>
+
+  <rect class="tool" x="800" y="454" width="260" height="82" rx="8"/>
+  <text class="t" x="930" y="476" text-anchor="middle">D · "can't reach X"?</text>
+  <text class="s" x="930" y="494" text-anchor="middle">check X in get_container_health</text>
+  <text class="s" x="930" y="510" text-anchor="middle">X unhealthy → blame X</text>
+  <text class="s" x="930" y="526" text-anchor="middle">X healthy → blame the caller</text>
+  <path class="l" d="M930,536 L930,558"/>
+
+  <rect class="tool" x="800" y="558" width="260" height="66" rx="8"/>
+  <text class="t" x="930" y="580" text-anchor="middle">E · search_logs</text>
+  <text class="s" x="930" y="598" text-anchor="middle">that service, that window, WARN+:</text>
+  <text class="s" x="930" y="614" text-anchor="middle">the cause written in plain English</text>
+  <path class="l" d="M930,624 L930,690 L990,690"/>
+
+  <rect class="tool" x="1110" y="262" width="260" height="82" rx="8"/>
+  <text class="t" x="1240" y="284" text-anchor="middle">F · get_container_health</text>
+  <text class="s" x="1240" y="302" text-anchor="middle">NOT_RUNNING · RESTART_LOOP</text>
+  <text class="s" x="1240" y="318" text-anchor="middle">OOM_KILLED · CPU_LIMITED</text>
+  <text class="s" x="1240" y="334" text-anchor="middle">(silent in metrics = DOWN, not fine)</text>
+  <path class="l" d="M1240,344 L1240,366"/>
+
+  <rect class="tool" x="1110" y="366" width="260" height="66" rx="8"/>
+  <text class="t" x="1240" y="388" text-anchor="middle">G · search_traces (slow)</text>
+  <text class="s" x="1240" y="406" text-anchor="middle">only_errors=false + min_duration_ms</text>
+  <text class="s" x="1240" y="422" text-anchor="middle">→ latency hotspot (self time)</text>
+  <path class="l" d="M1240,432 L1240,454"/>
+
+  <rect class="tool" x="1110" y="454" width="260" height="66" rx="8"/>
+  <text class="t" x="1240" y="476" text-anchor="middle">H · get_deploy_history</text>
+  <text class="s" x="1240" y="494" text-anchor="middle">what was started, stopped,</text>
+  <text class="s" x="1240" y="510" text-anchor="middle">restarted or re-limited recently</text>
+  <path class="l" d="M1240,520 L1240,690 L1180,690"/>
+
+  <polygon class="b" points="1085,642 1180,690 1085,738 990,690"/>
+  <text class="t" x="1085" y="686" text-anchor="middle">converges on</text>
+  <text class="t" x="1085" y="703" text-anchor="middle">one component?</text>
+  <path class="l" d="M1037,714 L930,770"/><text class="lab" x="955" y="740">yes</text>
+  <path class="l" d="M1133,714 L1240,770"/><text class="lab" x="1190" y="740">thin / conflicting</text>
+
+  <rect class="out" x="800" y="770" width="260" height="82" rx="8"/>
+  <text class="t" x="930" y="792" text-anchor="middle">DIAGNOSED</text>
+  <text class="s" x="930" y="810" text-anchor="middle">root cause + refs + confidence</text>
+  <text class="s" x="930" y="826" text-anchor="middle">+ ONE allowlisted action</text>
+  <text class="s" x="930" y="842" text-anchor="middle">(restart · flag · throttle · scale)</text>
+
+  <rect class="esc" x="1110" y="770" width="260" height="82" rx="8"/>
+  <text class="t" x="1240" y="792" text-anchor="middle">ESCALATED</text>
+  <text class="s" x="1240" y="810" text-anchor="middle">"I am not sure, here is what</text>
+  <text class="s" x="1240" y="826" text-anchor="middle">I found" → human · low confidence</text>
+  <text class="s" x="1240" y="842" text-anchor="middle">(scores better than confident-wrong)</text>
+
+  <rect class="b" x="800" y="880" width="570" height="76" rx="8"/>
+  <text class="t" x="1085" y="903" text-anchor="middle">The one rule that matters most</text>
+  <text class="s" x="1085" y="923" text-anchor="middle">paymentFailure on → frontend-proxy, frontend, checkout and payment ALL report errors.</text>
+  <text class="s" x="1085" y="941" text-anchor="middle">The alert names the symptom (frontend). The answer is the deepest failure (payment).</text>
+</svg>

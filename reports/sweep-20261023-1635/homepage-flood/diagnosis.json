@@ -1,0 +1,70 @@
+{
+  "incident_id": "homepage-flood",
+  "generated_at": "2026-10-23T11:40:28Z",
+  "alert": "Request rate and latency spiking on frontend-proxy",
+  "status": "diagnosed",
+  "root_cause": {
+    "service": "accounting",
+    "fault_type": "latency",
+    "summary": "The accounting service is experiencing very high processing latency (up to 15 seconds) for order consumption, causing downstream latency spikes observed at the frontend-proxy. No errors are reported, but traces show the accounting span dominates the latency."
+  },
+  "symptom_services": [
+    "frontend-proxy"
+  ],
+  "confidence": 0.85,
+  "confidence_label": "high",
+  "evidence": [
+    {
+      "service": "accounting",
+      "metric": "p95_latency_ms",
+      "value": 15000.0,
+      "promql": "histogram_quantile(0.95, sum by (service_name, le) (rate(traces_span_metrics_duration_milliseconds_bucket[5m])))",
+      "timestamp": "2026-10-23T11:39:22Z",
+      "reference": "metric-1",
+      "kind": "metric",
+      "why_it_matters": "accounting shows SLOW status with p95 latency 15000ms"
+    },
+    {
+      "trace_id": "295271321d1955b05fd5e08ad06242ea",
+      "service": "accounting",
+      "span_name": "order-consumed",
+      "duration_ms": 5274.2,
+      "status": "OK",
+      "exception": null,
+      "reference": "trace-2",
+      "kind": "trace",
+      "why_it_matters": "accounting order-consumed span takes >5s self time, indicating internal slowness"
+    }
+  ],
+  "proposed_action": {
+    "action": "restart_service",
+    "target": "accounting",
+    "reason": "accounting service latency is high, likely due to stuck state or DB connection issue",
+    "requires_approval": true
+  },
+  "investigation": {
+    "tool_calls": 7,
+    "tools_used": [
+      "get_container_health",
+      "get_deploy_history",
+      "get_service_health",
+      "list_services",
+      "search_logs",
+      "search_traces"
+    ],
+    "model": "openai/gpt-oss-120b",
+    "duration_seconds": 67.7,
+    "calibration_notes": []
+  },
+  "timeline": [
+    {
+      "time": "2026-10-23T11:39:21Z",
+      "event": "Alert received: Request rate and latency spiking on frontend-proxy"
+    },
+    {
+      "time": "2026-10-23T11:40:28Z",
+      "event": "Diagnosis submitted after 7 tool calls"
+    }
+  ],
+  "prevention": "Add health checks and auto-restart on prolonged latency, or investigate DB query performance"
+}
