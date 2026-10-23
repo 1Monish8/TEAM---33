@@ -1,0 +1,86 @@
+{
+  "incident_id": "recommendation-cache-leak",
+  "generated_at": "2026-10-23T11:29:01Z",
+  "alert": "Latency p95 above threshold on frontend",
+  "status": "diagnosed",
+  "root_cause": {
+    "service": "cart",
+    "fault_type": "dependency_unreachable",
+    "summary": "The cart service cannot connect to its Redis (valkey-cart) cache, raising FailedPrecondition errors. These errors surface in quote and checkout flows, inflating overall request latency observed at the frontend."
+  },
+  "symptom_services": [
+    "frontend",
+    "checkout",
+    "quote"
+  ],
+  "confidence": 0.85,
+  "confidence_label": "high",
+  "evidence": [
+    {
+      "trace_id": "0058c3159f7fbc238fca4b81e4a403ac",
+      "service": "cart",
+      "span_name": "POST /oteldemo.CartService/EmptyCart",
+      "duration_ms": 4009.5,
+      "status": "ERROR",
+      "exception": "Status(StatusCode=\"FailedPrecondition\", Detail=\"Can't access cart storage. System.ApplicationException: Wasn't able to connect to redis\n   at cart.cartstore.ValkeyCartStore.EnsureRedisConnected() in /usr/src/app/src/cartstore/ValkeyCartStore.cs:line 103\n   at cart.cartstore.ValkeyCartStore.EmptyCart",
+      "reference": "trace-2",
+      "kind": "trace",
+      "why_it_matters": "Deepest failing span is cart POST /EmptyCart with connection error to Redis."
+    },
+    {
+      "trace_id": "56ce11c2610720080a777bf50bab862c",
+      "service": "cart",
+      "span_name": "POST /oteldemo.CartService/EmptyCart",
+      "duration_ms": 4480.1,
+      "status": "ERROR",
+      "exception": "Status(StatusCode=\"FailedPrecondition\", Detail=\"Can't access cart storage. System.ApplicationException: Wasn't able to connect to redis\n   at cart.cartstore.ValkeyCartStore.EnsureRedisConnected() in /usr/src/app/src/cartstore/ValkeyCartStore.cs:line 103\n   at cart.cartstore.ValkeyCartStore.EmptyCart",
+      "reference": "trace-3",
+      "kind": "trace",
+      "why_it_matters": "Repeated same failure in another trace, confirming cart issue."
+    },
+    {
+      "timestamp": "2026-10-23T11:13:57.0796826Z",
+      "service": "cart",
+      "severity": "Error",
+      "message": "Wasn't able to connect to redis",
+      "trace_id": "0058c3159f7fbc238fca4b81e4a403ac",
+      "reference": "log-5",
+      "kind": "log",
+      "why_it_matters": "Cart logs error 'Wasn't able to connect to redis' matching trace failures."
+    }
+  ],
+  "proposed_action": {
+    "action": "restart_service",
+    "target": "cart",
+    "reason": "Cart service is failing to connect to its Redis cache, causing errors and high latency upstream.",
+    "requires_approval": true
+  },
+  "investigation": {
+    "tool_calls": 8,
+    "tools_used": [
+      "get_container_health",
+      "get_service_health",
+      "list_services",
+      "search_logs",
+      "search_traces"
+    ],
+    "model": "openai/gpt-oss-120b",
+    "duration_seconds": 153.6,
+    "calibration_notes": []
+  },
+  "timeline": [
+    {
+      "time": "2026-10-23T11:13:57.0796826Z",
+      "event": "Earliest cited log line from cart"
+    },
+    {
+      "time": "2026-10-23T11:26:27Z",
+      "event": "Alert received: Latency p95 above threshold on frontend"
+    },
+    {
+      "time": "2026-10-23T11:29:01Z",
+      "event": "Diagnosis submitted after 8 tool calls"
+    }
+  ],
+  "prevention": "Add health checks and circuit breaker for Redis connection in cart service to avoid propagating failures."
+}

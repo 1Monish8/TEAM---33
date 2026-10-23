@@ -1,0 +1,84 @@
+{
+  "incident_id": "payment-failure",
+  "generated_at": "2026-10-23T10:48:14Z",
+  "alert": "Error rate above 5% on frontend checkout requests",
+  "status": "diagnosed",
+  "root_cause": {
+    "service": "kafka",
+    "fault_type": "dependency_unreachable",
+    "summary": "The Kafka broker lost its metadata, making the 'orders' topic unavailable. Accounting cannot consume order messages, causing errors that propagate up to checkout requests, leading to the observed >5% error rate on frontend checkout."
+  },
+  "symptom_services": [
+    "frontend",
+    "checkout"
+  ],
+  "confidence": 0.7,
+  "confidence_label": "medium",
+  "evidence": [
+    {
+      "service": "accounting",
+      "metric": "error_ratio",
+      "value": 0.1111,
+      "promql": "sum by (service_name) (rate(traces_span_metrics_calls_total{status_code=\"STATUS_CODE_ERROR\"}[5m])) / sum by (service_name) (rate(traces_span_metrics_calls_total[5m]))",
+      "timestamp": "2026-10-23T10:46:46Z",
+      "reference": "metric-1",
+      "kind": "metric",
+      "why_it_matters": "Accounting shows 11% error rate, highest among services"
+    },
+    {
+      "trace_id": "604431104d91ff2c2cbd1ab2a465dd60",
+      "service": "accounting",
+      "span_name": "receive orders",
+      "duration_ms": 88.4,
+      "status": "ERROR",
+      "exception": "Subscribed topic not available: orders: Broker: Unknown topic or partition",
+      "reference": "trace-2",
+      "kind": "trace",
+      "why_it_matters": "Deepest failing span is accounting receiving orders, error 'Subscribed topic not available'"
+    },
+    {
+      "timestamp": "2026-10-23T10:43:50.313207805Z",
+      "service": "kafka",
+      "severity": "WARN",
+      "message": "[QuorumController id=1] Performing controller activation. The metadata log appears to be empty. Appending 6 bootstrap record(s) in metadata transaction at metadata.version 4.3-IV0 from bootstrap source 'the binary bootstrap metadata file: /tmp/kafka-logs/bootstrap.checkpoint'.",
+      "reference": "log-4",
+      "kind": "log",
+      "why_it_matters": "Kafka log indicates controller activation with empty metadata, suggesting topic loss"
+    }
+  ],
+  "proposed_action": {
+    "action": "restart_service",
+    "target": "kafka",
+    "reason": "Kafka broker lost metadata and the 'orders' topic is unavailable, causing accounting consumption failures",
+    "requires_approval": true
+  },
+  "investigation": {
+    "tool_calls": 5,
+    "tools_used": [
+      "get_container_health",
+      "get_service_health",
+      "search_logs",
+      "search_traces"
+    ],
+    "model": "openai/gpt-oss-120b",
+    "duration_seconds": 88.3,
+    "calibration_notes": [
+      "confidence capped from 0.86 to 0.70: only 1 evidence kind(s) name kafka"
+    ]
+  },
+  "timeline": [
+    {
+      "time": "2026-10-23T10:43:50.313207805Z",
+      "event": "Earliest cited log line from kafka"
+    },
+    {
+      "time": "2026-10-23T10:46:45Z",
+      "event": "Alert received: Error rate above 5% on frontend checkout requests"
+    },
+    {
+      "time": "2026-10-23T10:48:14Z",
+      "event": "Diagnosis submitted after 5 tool calls"
+    }
+  ],
+  "prevention": "Ensure Kafka topic persistence and monitor controller activation; automate topic recreation on startup"
+}

@@ -1,0 +1,81 @@
+{
+  "incident_id": "payment-failure",
+  "generated_at": "2026-10-23T11:07:52Z",
+  "alert": "Error rate above 5% on frontend checkout requests",
+  "status": "diagnosed",
+  "root_cause": {
+    "service": "payment",
+    "fault_type": "application_error",
+    "summary": "The payment service is returning 'Invalid token' errors for checkout requests, causing a high error rate observed at the frontend checkout endpoint. Traces show the deepest failing span is within payment, and metrics confirm a high error ratio. Users see checkout failures."
+  },
+  "symptom_services": [
+    "frontend",
+    "frontend-proxy",
+    "load-generator"
+  ],
+  "confidence": 0.85,
+  "confidence_label": "high",
+  "evidence": [
+    {
+      "service": "payment",
+      "metric": "error_ratio",
+      "value": 0.1333,
+      "promql": "sum by (service_name) (rate(traces_span_metrics_calls_total{status_code=\"STATUS_CODE_ERROR\"}[5m])) / sum by (service_name) (rate(traces_span_metrics_calls_total[5m]))",
+      "timestamp": "2026-10-23T11:07:03Z",
+      "reference": "metric-1",
+      "kind": "metric",
+      "why_it_matters": "Payment service error ratio is 13.33%, far above normal and matches the alert."
+    },
+    {
+      "trace_id": "899d95a6ead8f41127de6f4797d09c93",
+      "service": "payment",
+      "span_name": "charge",
+      "duration_ms": 0.9,
+      "status": "ERROR",
+      "exception": "Payment request failed. Invalid token. demo.user_context.loyalty_level=gold",
+      "reference": "trace-3",
+      "kind": "trace",
+      "why_it_matters": "Deepest failing span is in payment: 'Payment request failed. Invalid token', indicating the error originates in payment."
+    },
+    {
+      "trace_id": "196c1e7ea455ac25d2f6be5bbd9f740f",
+      "service": "payment",
+      "span_name": "charge",
+      "duration_ms": 4.6,
+      "status": "ERROR",
+      "exception": "Payment request failed. Invalid token. demo.user_context.loyalty_level=gold",
+      "reference": "trace-4",
+      "kind": "trace",
+      "why_it_matters": "Consistent error pattern in payment service across multiple traces."
+    }
+  ],
+  "proposed_action": {
+    "action": "toggle_feature_flag",
+    "target": "payment",
+    "reason": "Payment service is rejecting valid tokens, causing checkout errors; disabling the strict token validation flag should stop the failures.",
+    "requires_approval": true
+  },
+  "investigation": {
+    "tool_calls": 4,
+    "tools_used": [
+      "get_container_health",
+      "get_service_health",
+      "search_logs",
+      "search_traces"
+    ],
+    "model": "openai/gpt-oss-120b",
+    "duration_seconds": 49.2,
+    "calibration_notes": []
+  },
+  "timeline": [
+    {
+      "time": "2026-10-23T11:07:02Z",
+      "event": "Alert received: Error rate above 5% on frontend checkout requests"
+    },
+    {
+      "time": "2026-10-23T11:07:52Z",
+      "event": "Diagnosis submitted after 4 tool calls"
+    }
+  ],
+  "prevention": "Ensure token validation logic is correct or guard it behind a feature flag that can be disabled if errors appear."
+}

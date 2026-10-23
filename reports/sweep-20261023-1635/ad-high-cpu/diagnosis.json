@@ -1,0 +1,71 @@
+{
+  "incident_id": "ad-high-cpu",
+  "generated_at": "2026-10-23T11:34:50Z",
+  "alert": "Latency p95 above threshold on frontend",
+  "status": "diagnosed",
+  "root_cause": {
+    "service": "accounting",
+    "fault_type": "latency",
+    "summary": "The accounting service is taking many seconds to process order-consumed requests, likely due to a downstream database slowdown, which inflates overall request latency observed at the frontend."
+  },
+  "symptom_services": [
+    "frontend",
+    "frontend-proxy"
+  ],
+  "confidence": 0.85,
+  "confidence_label": "high",
+  "evidence": [
+    {
+      "service": "accounting",
+      "metric": "p95_latency_ms",
+      "value": 15000.0,
+      "promql": "histogram_quantile(0.95, sum by (service_name, le) (rate(traces_span_metrics_duration_milliseconds_bucket[5m])))",
+      "timestamp": "2026-10-23T11:33:33Z",
+      "reference": "metric-1",
+      "kind": "metric",
+      "why_it_matters": "accounting shows SLOW status with p95 latency 15000 ms"
+    },
+    {
+      "trace_id": "17a814bb1069e443ce33749d85f516b4",
+      "service": "accounting",
+      "span_name": "order-consumed",
+      "duration_ms": 57363.4,
+      "status": "OK",
+      "exception": null,
+      "reference": "trace-2",
+      "kind": "trace",
+      "why_it_matters": "accounting order-consumed span takes ~57 seconds self time, dominating request latency"
+    }
+  ],
+  "proposed_action": {
+    "action": "restart_service",
+    "target": "accounting",
+    "reason": "accounting service latency is causing frontend p95 to exceed threshold",
+    "requires_approval": true
+  },
+  "investigation": {
+    "tool_calls": 8,
+    "tools_used": [
+      "get_container_health",
+      "get_deploy_history",
+      "get_service_health",
+      "list_services",
+      "search_logs",
+      "search_traces"
+    ],
+    "model": "openai/gpt-oss-120b",
+    "duration_seconds": 78.1,
+    "calibration_notes": []
+  },
+  "timeline": [
+    {
+      "time": "2026-10-23T11:33:32Z",
+      "event": "Alert received: Latency p95 above threshold on frontend"
+    },
+    {
+      "time": "2026-10-23T11:34:50Z",
+      "event": "Diagnosis submitted after 8 tool calls"
+    }
+  ],
+  "prevention": "Add DB query performance monitoring and autoscale accounting service to handle load spikes"
+}

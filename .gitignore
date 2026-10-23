@@ -6,3 +6,4 @@ __pycache__/
 runs/
 practice/.faultctl_state.json
 KILL_SWITCH
+.DS_Store
