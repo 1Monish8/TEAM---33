@@ -1,0 +1,50 @@
+{
+  "incident_id": "example-0001",
+  "generated_at": "2026-10-23T12:30:00Z",
+  "alert": "Error rate above 5% on frontend",
+  "status": "diagnosed",
+  "root_cause": {
+    "service": "payment",
+    "fault_type": "application_error",
+    "summary": "payment's Charge span fails with an exception; checkout and frontend only propagate the error upward."
+  },
+  "symptom_services": ["checkout", "frontend"],
+  "confidence": 0.85,
+  "confidence_label": "high",
+  "evidence": [
+    {
+      "reference": "metric-1",
+      "kind": "metric",
+      "service": "payment",
+      "metric": "error_ratio",
+      "promql": "sum by (service_name) (rate(traces_span_metrics_calls_total{status_code=\"STATUS_CODE_ERROR\"}[5m])) / sum by (service_name) (rate(traces_span_metrics_calls_total[5m]))",
+      "value": 0.5,
+      "timestamp": "2026-10-23T12:29:00Z"
+    },
+    {
+      "reference": "trace-2",
+      "kind": "trace",
+      "service": "payment",
+      "trace_id": "0af7651916cd43dd8448eb211c80319c",
+      "span_name": "oteldemo.PaymentService/Charge",
+      "duration_ms": 12.3,
+      "status": "ERROR",
+      "exception": "Payment request failed. Invalid token."
+    },
+    {
+      "reference": "log-3",
+      "kind": "log",
+      "service": "payment",
+      "timestamp": "2026-10-23T12:29:10Z",
+      "severity": "ERROR",
+      "message": "Payment request failed. Invalid token."
+    }
+  ],
+  "proposed_action": {
+    "action": "escalate_to_human",
+    "target": "payment",
+    "reason": "Hand-written example only.",
+    "requires_approval": true
+  },
+  "investigation": {"tool_calls": 5, "tools_used": ["get_service_health", "search_traces", "get_trace", "search_logs"], "model": "example"}
+}

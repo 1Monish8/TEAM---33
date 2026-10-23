@@ -3,3 +3,6 @@ __pycache__/
 *.pyc
 .env
 .env.local
+runs/
+practice/.faultctl_state.json
+KILL_SWITCH

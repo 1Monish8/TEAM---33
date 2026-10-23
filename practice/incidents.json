@@ -1,0 +1,65 @@
+{
+  "_note": "STAND-IN practice set. Replace with the organisers' faultctl incident list at kickoff. The agent never reads this file; only faultctl.py and run_all.py (scoring) do.",
+  "incidents": {
+    "payment-failure": {
+      "kind": "flag", "flag": "paymentFailure", "variant": "100%",
+      "alert": "Error rate above 5% on frontend checkout requests",
+      "expected_service": "payment", "accept": ["payment"]
+    },
+    "cart-failure": {
+      "kind": "flag", "flag": "cartFailure", "variant": "50%",
+      "alert": "Error rate elevated on frontend",
+      "expected_service": "cart", "accept": ["cart", "valkey-cart"]
+    },
+    "product-catalog-failure": {
+      "kind": "flag", "flag": "productCatalogFailure", "variant": "on",
+      "alert": "Error rate elevated on frontend product pages",
+      "expected_service": "product-catalog", "accept": ["product-catalog"]
+    },
+    "recommendation-cache-leak": {
+      "kind": "flag", "flag": "recommendationCacheFailure", "variant": "on",
+      "alert": "Latency p95 above threshold on frontend",
+      "expected_service": "recommendation", "accept": ["recommendation"]
+    },
+    "ad-high-cpu": {
+      "kind": "flag", "flag": "adHighCpu", "variant": "on",
+      "alert": "Latency p95 above threshold on frontend",
+      "expected_service": "ad", "accept": ["ad"]
+    },
+    "homepage-flood": {
+      "kind": "flag", "flag": "loadGeneratorFloodHomepage", "variant": "on",
+      "alert": "Request rate and latency spiking on frontend-proxy",
+      "expected_service": "frontend", "accept": ["frontend", "frontend-proxy", "load-generator"]
+    },
+    "payment-unreachable": {
+      "kind": "flag", "flag": "paymentUnreachable", "variant": "on",
+      "alert": "Checkout failures reported by users",
+      "expected_service": "payment", "accept": ["payment"]
+    },
+    "kafka-queue-problems": {
+      "kind": "flag", "flag": "kafkaQueueProblems", "variant": "3sec",
+      "alert": "Order processing delayed downstream of checkout",
+      "expected_service": "fraud-detection", "accept": ["fraud-detection", "kafka"]
+    },
+    "currency-stopped": {
+      "kind": "docker_stop", "container": "currency",
+      "alert": "Error rate elevated on frontend",
+      "expected_service": "currency", "accept": ["currency"]
+    },
+    "cart-cache-down": {
+      "kind": "docker_stop", "container": "valkey-cart",
+      "alert": "Error rate elevated on frontend cart operations",
+      "expected_service": "valkey-cart", "accept": ["valkey-cart"]
+    },
+    "shipping-restart-loop": {
+      "kind": "restart_loop", "container": "shipping", "every_seconds": 20,
+      "alert": "Intermittent checkout errors",
+      "expected_service": "shipping", "accept": ["shipping"]
+    },
+    "checkout-cpu-starved": {
+      "kind": "cpu_starve", "container": "checkout", "cpus": "0.03",
+      "alert": "Latency p95 above threshold on checkout",
+      "expected_service": "checkout", "accept": ["checkout"]
+    }
+  }
+}
