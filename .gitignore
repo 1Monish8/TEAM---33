@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 .env
 .env.local
-.env
-.venv/
-__pycache__/
+runs/
+practice/.faultctl_state.json
+KILL_SWITCH
+.DS_Store
