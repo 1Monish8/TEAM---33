@@ -53,7 +53,9 @@ def render_markdown(diagnosis):
             lines.append("- The review did not run: " + review["verdict"])
         else:
             lines.append("- **Verdict:** " + ("DISPUTED" if review["disputed"] else "CONFIRMED")
-                         + (" (better candidate: `%s`)" % review["better_candidate"] if review.get("better_candidate") else ""))
+                         + (" (better candidate: `%s`)" % review["better_candidate"] if review.get("better_candidate") else "")
+                         + ((" — grounded in the data, confidence lowered" if review.get("grounded")
+                             else " — not grounded in the data, recorded only") if review["disputed"] else ""))
             lines.append("- " + review["verdict"])
     if diagnosis.get("action_loop"):
         lines += _action_loop_lines(diagnosis["action_loop"])

@@ -290,7 +290,9 @@ def run_investigation(alert_text, incident_id=None, maximum_iterations=None, tra
             _log("  tool call rejected by the API:", str(error)[:200])
             record({"event": "tool_call_rejected", "iteration": iteration, "error": str(error)[:1000]})
             messages.append({"role": "user", "content": "Your last tool call was rejected by the API before it ran: "
-                             + str(error)[:600] + " Call the tool again with arguments that exactly match its schema "
+                             + str(error)[:600] + " The only tools that exist are: "
+                             + ", ".join(t["function"]["name"] for t in TOOL_DESCRIPTIONS)
+                             + ". Call one of them with arguments that exactly match its schema "
                              "(use null or leave out optional fields you do not need)."})
             if rejections >= 3:
                 break
@@ -378,6 +380,9 @@ Consider in particular:
 - a service whose numbers look bad but are normal FOR THAT SERVICE (deviation_score near 0)
 - a different service that moved much further from its own baseline than the one named
 - evidence that is consistent with the conclusion but does not actually support it
+Dispute only for a concrete reason grounded in the evidence or the ranking above, ideally naming a better candidate
+service. Speculation about things the evidence does not show is not a reason: if you cannot point to a concrete flaw,
+reply CONFIRMED. (Only a dispute that names a better-supported service changes the confidence.)
 Reply with exactly one line, one of:
 CONFIRMED: <one sentence on why the evidence does support this conclusion>
 DISPUTED: <the flaw> | better candidate: <service name, or none>"""
@@ -409,14 +414,31 @@ def review_diagnosis(diagnosis):
 
 
 def apply_review(diagnosis):
+    """A dispute lowers confidence only when it is GROUNDED in the data: it names a real service as the better
+    candidate, and that service moved at least as far from its own baseline as the one claimed (the Day 1
+    failure: accounting claimed at deviation 0 while ad sat at 10x its normal CPU). Speculation ("maybe the
+    token is wrong upstream, better candidate: none") is recorded in the report but does not override evidence;
+    on the first live tests the reviewer disputed every correct diagnosis that way."""
     review = review_diagnosis(diagnosis)
     diagnosis["review"] = review
-    if review.get("disputed") and diagnosis["confidence"] > 0.6:
-        # a second model found a hole: exactly when a confident answer is dangerous
+    if not review.get("disputed"):
+        return diagnosis
+    deviation = dict(tools.last_deviation_ranking)
+    claimed, better = diagnosis["root_cause"]["service"], review.get("better_candidate")
+    known = set(deviation) | {item.get("service") for item in diagnosis["evidence"]}
+    grounded = bool(better) and better != claimed and better in known and (
+        claimed not in deviation or (deviation.get(better) or 0) >= 0.8 * (deviation.get(claimed) or 0))
+    review["grounded"] = grounded
+    if grounded and diagnosis["confidence"] > 0.6:
+        # a second model found a concrete hole: exactly when a confident answer is dangerous
         diagnosis["investigation"]["calibration_notes"].append(
-            "confidence lowered from %.2f to 0.60: the reviewer disputed this diagnosis" % diagnosis["confidence"])
+            "confidence lowered from %.2f to 0.60: the reviewer disputed it with a grounded alternative (%s, deviation %s "
+            "vs %s for %s)" % (diagnosis["confidence"], better, deviation.get(better), deviation.get(claimed), claimed))
         diagnosis["confidence"] = 0.6
         diagnosis["confidence_label"] = _label_for(0.6)
+    elif not grounded:
+        diagnosis["investigation"]["calibration_notes"].append(
+            "reviewer dispute recorded but not applied: it named no better candidate supported by the data")
     return diagnosis
 
 

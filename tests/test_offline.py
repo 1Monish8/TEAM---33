@@ -193,6 +193,21 @@ def test_a_rejected_tool_call_never_crashes_the_run():
     assert calls["n"] == 2 and diagnosis["status"] == "escalated" and report.schema_errors(diagnosis) == []
 
 
+def test_only_a_grounded_reviewer_dispute_lowers_confidence():
+    def claim():
+        return {"root_cause": {"service": "accounting"}, "confidence": 0.85, "confidence_label": "high",
+                "evidence": [{"service": "accounting"}], "investigation": {"calibration_notes": []}}
+    saved_review, saved_ranking = agent.review_diagnosis, list(tools.last_deviation_ranking)
+    tools.last_deviation_ranking[:] = [("ad", 9.0), ("payment", 0.2), ("accounting", 0.0)]
+    try:
+        agent.review_diagnosis = lambda d: {"ran": True, "disputed": True, "better_candidate": "ad", "verdict": "DISPUTED"}
+        assert agent.apply_review(claim())["confidence"] == 0.6        # names a service that moved far more: applied
+        agent.review_diagnosis = lambda d: {"ran": True, "disputed": True, "better_candidate": None, "verdict": "DISPUTED"}
+        assert agent.apply_review(claim())["confidence"] == 0.85       # speculation: recorded, not applied
+    finally:
+        agent.review_diagnosis, tools.last_deviation_ranking[:] = saved_review, saved_ranking
+
+
 import tempfile  # noqa: E402
 
 import actions  # noqa: E402

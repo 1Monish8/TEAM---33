@@ -215,6 +215,10 @@
             "string",
             "null"
           ]
+        },
+        "grounded": {
+          "type": "boolean",
+          "description": "true = the dispute named a better-supported service and lowered confidence"
         }
       }
     },
