@@ -156,6 +156,18 @@ def build_diagnosis(arguments, run):
         return None, ("status=diagnosed but none of the cited CURRENT evidence is about '" + str(root_service)
                       + "' (evidence from more than %d minutes ago belongs to an earlier incident). Cite recent evidence "
                       "that names the root-cause service, or submit status=escalated." % STALE_EVIDENCE_MINUTES)
+    # Consistency check, the infrastructure twin of the evidence guard: if this run SAW a demo container stopped,
+    # crashed or restart-looping and the diagnosis names something else, challenge it once. Not an override: the
+    # model may keep its answer if it explains why the container is unrelated. (Found in the Day 2 sweep: the
+    # fallback model named frontend-proxy while get_container_health showed valkey-cart NOT_RUNNING.)
+    unexplained = {name: problem for name, problem in tools.hard_container_problems.items() if name != root_service}
+    if status == "diagnosed" and unexplained and root_service not in tools.hard_container_problems \
+            and not run.get("infra_challenge_done"):
+        run["infra_challenge_done"] = True
+        return None, ("Before this is accepted: get_container_health showed " + "; ".join(
+            "%s %s" % item for item in unexplained.items()) + ". A stopped, crashed or restart-looping container is the "
+            "strongest evidence an outage can have. Either name that container as the root cause (if your evidence "
+            "connects it), or resubmit and explain in root_cause_summary why it is unrelated.")
     if len(kinds_naming_root) < 2 and confidence > 0.7:
         notes.append("confidence capped from %.2f to 0.70: only %d evidence kind(s) name %s"
                      % (confidence, len(kinds_naming_root), root_service))

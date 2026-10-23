@@ -25,6 +25,7 @@ evidence_registry = {}
 
 def reset_evidence_registry():
     evidence_registry.clear()
+    hard_container_problems.clear()
 
 
 def register_evidence_item(kind, item):
@@ -326,6 +327,12 @@ def _container_metrics():
 
 DEMO_COMPOSE_PROJECT = "opentelemetry-demo"
 
+# A stopped, crashed or restart-looping container is the strongest evidence an outage can have. Containers seen
+# with one of these in the current run are remembered here (reset with the evidence registry), so the agent's
+# submission can be challenged if it names a different service without explaining why.
+HARD_CONTAINER_PROBLEMS = ("NOT_RUNNING", "OOM_KILLED", "CRASHED_AND_RESTARTED", "RESTART_LOOP")
+hard_container_problems = {}
+
 
 def _docker_containers():
     # the Docker engine's view of the demo's containers (only this compose project, not other apps on the laptop)
@@ -411,8 +418,12 @@ def get_container_health(window_minutes=15):
             problems.append("NOT_RUNNING (state=%s exit_code=%s since %s)" % (state.get("Status"), state.get("ExitCode"), state.get("FinishedAt", "")[:19] + "Z"))
         if state.get("OOMKilled"):
             problems.append("OOM_KILLED")
-        if (metrics.get("uptime_resets_in_window") or 0) >= 2 or row["restart_count"] >= 2:
-            problems.append("RESTART_LOOP")
+        # Windowed: Docker's RestartCount is a LIFETIME total, so kafka, restarted a few times over a night, was
+        # reported as RESTART_LOOP forever. A loop means restarts INSIDE the window: repeated uptime resets, or
+        # several lifetime restarts and the latest one inside the window.
+        resets = metrics.get("uptime_resets_in_window") or 0
+        if resets >= 2 or (row["restart_count"] >= 2 and resets >= 1 and row["uptime_seconds"] < window_minutes * 60):
+            problems.append("RESTART_LOOP (%d restarts in the last %d min)" % (max(resets, 1), window_minutes))
         elif row["restart_count"] >= 1 and row["uptime_seconds"] < window_minutes * 60:
             # Docker's restart policy brought it back: it CRASHED (e.g. memory leak -> OOM) during the window
             problems.append("CRASHED_AND_RESTARTED (restarted by Docker %d min ago)" % (row["uptime_seconds"] // 60))
@@ -467,6 +478,10 @@ def get_container_health(window_minutes=15):
                 "baseline": row["cpu_baseline"]})
 
     rows.sort(key=lambda row: (len(row["problems"]), row["cpu_vs_baseline"] or 0), reverse=True)
+    for row in rows:
+        hard = [problem for problem in row["problems"] if problem.startswith(HARD_CONTAINER_PROBLEMS)]
+        if hard and row["container"] not in CLIENT_SERVICES:
+            hard_container_problems[row["container"]] = hard[0]
     result = {
         "window": _window(window_minutes),
         "containers_checked": len(rows),

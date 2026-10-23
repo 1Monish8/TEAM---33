@@ -208,6 +208,20 @@ def test_only_a_grounded_reviewer_dispute_lowers_confidence():
         agent.review_diagnosis, tools.last_deviation_ranking[:] = saved_review, saved_ranking
 
 
+def test_a_seen_stopped_container_challenges_a_different_diagnosis_once():
+    # The Day 2 sweep's cart-cache-down: valkey-cart was NOT_RUNNING, the fallback model said frontend-proxy.
+    tools.reset_evidence_registry()
+    ref = tools.register_evidence_item("trace", {"trace_id": "t", "service": "frontend-proxy", "span_name": "egress",
+                                                 "duration_ms": 1.0, "status": "ERROR", "exception": None})
+    tools.hard_container_problems["valkey-cart"] = "NOT_RUNNING (state=exited)"
+    run = _run()
+    wrong = dict(_args([ref]), root_cause_service="frontend-proxy")
+    diagnosis, problem = agent.build_diagnosis(wrong, run)
+    assert diagnosis is None and "valkey-cart" in problem          # challenged once...
+    diagnosis, problem = agent.build_diagnosis(wrong, run)
+    assert problem is None                                         # ...not overridden: the model may insist
+
+
 import tempfile  # noqa: E402
 
 import actions  # noqa: E402

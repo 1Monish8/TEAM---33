@@ -28,6 +28,10 @@ def _docker(*args):
     return subprocess.run(["docker", *args], capture_output=True, text=True, timeout=60)
 
 
+def _vm_cpus():
+    return subprocess.run(["docker", "info", "--format", "{{.NCPU}}"], capture_output=True, text=True, timeout=20).stdout.strip() or "8"
+
+
 def _load_state():
     return json.loads(STATE_FILE.read_text()) if STATE_FILE.exists() else {"active": []}
 
@@ -113,7 +117,9 @@ def reset():
         if incident["kind"] in ("docker_stop", "restart_loop"):
             _docker("start", incident["container"])
         if incident["kind"] == "cpu_starve":
-            _docker("update", "--cpus", "0", incident["container"])
+            # NOT "--cpus 0": on Docker 29 that leaves the old limit in place (checkout stayed starved at 0.03 cores
+            # for an hour and kept crashing). Setting the limit to every core of the Docker VM removes it in effect.
+            _docker("update", "--cpus", _vm_cpus(), incident["container"])
     _save_state({"active": []})
     print("reset: all flags off, containers started, CPU limits removed")
 
