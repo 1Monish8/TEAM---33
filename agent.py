@@ -318,7 +318,9 @@ def run_investigation(alert_text, incident_id=None, maximum_iterations=None, tra
             break
 
     if diagnosis is None:
-        diagnosis = fallback_escalation(run, "no accepted diagnosis within the iteration/rejection budget.")
+        reason = ("the investigation was stopped by the KILL_SWITCH." if KILL_SWITCH_FILE.exists()
+                  else "no accepted diagnosis within the iteration/rejection budget.")
+        diagnosis = fallback_escalation(run, reason)
     elif review_enabled and diagnosis["status"] == "diagnosed":
         apply_review(diagnosis)
         record({"event": "review", "model": llm.last_model_used, "review": diagnosis["review"]})
@@ -427,6 +429,8 @@ def act_on_diagnosis(diagnosis, auto_approve=False, dry_run=False, ask=None, tra
         progress("  OUTCOME: " + outcome)
         return loop
 
+    if KILL_SWITCH_FILE.exists():  # checked first, so the record says WHY nothing happened
+        return finish("halted: KILL_SWITCH present, nothing was changed")
     if diagnosis["status"] != "diagnosed" or action == "escalate_to_human":
         return finish("escalated to a human, no action: the agent was not confident enough to propose a change")
     if diagnosis["confidence"] < MIN_CONFIDENCE_TO_ACT:

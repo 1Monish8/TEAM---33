@@ -103,7 +103,7 @@ def test_feature_flag_text_is_redacted():
 # Day 2: the no-error branch (baselines) and the act-and-verify loop's safety gates
 # ---------------------------------------------------------------------------
 def _health_row(**overrides):
-    row = {"service": "accounting", "error_ratio": 0.0, "error_ratio_baseline": None, "p95_latency_ms": 15000.0,
+    row = {"service": "accounting", "error_ratio": 0.0, "error_ratio_baseline": None, "requests_per_second": 1.0, "p95_latency_ms": 15000.0,
            "p95_baseline_ms": 15000.0, "status_hint": "ok"}
     row.update(overrides)
     return row
@@ -118,6 +118,53 @@ def test_missing_baseline_fails_closed_and_chronic_latency_scores_zero():
     slower = tools._deviation_score(_health_row(service="ad", p95_latency_ms=900.0, p95_baseline_ms=300.0))
     failing = tools._deviation_score(_health_row(service="payment", error_ratio=0.5, p95_latency_ms=5.0, p95_baseline_ms=5.0))
     assert failing > slower > 0
+
+
+def test_down_vs_idle_vs_low_traffic_errors():
+    # Two bugs found in live tests: (1) payment at ~0.04 req/s was rounded to 0.0 and called IDLE despite 57%
+    # errors; (2) services silent only because their caller failed were ranked as "down" above the real cause.
+    rows = {  # field -> {service: value}, as Prometheus would return them
+        "error_ratio": {"payment": 0.57, "currency": 0.0, "fraud-detection": 0.0},
+        "requests_per_second": {"payment": 0.04, "currency": 0.3, "fraud-detection": 0.0},
+        "p95_latency_ms": {"payment": 5.0, "currency": 2.0},
+        "seen_last_hour": {"payment": 1, "currency": 1, "fraud-detection": 1},
+        "error_ratio_baseline": {"payment": 0.03},
+        "p95_baseline_ms": {"payment": 5.0, "currency": 2.0, "fraud-detection": 90.0},
+    }
+    saved = (tools.run_prometheus_query, tools._docker_containers, tools._span_metrics_age_seconds)
+
+    def fake_query(promql):
+        # route each PromQL query to the field it computes
+        if "quantile_over_time" in promql and "STATUS_CODE_ERROR" in promql:
+            field = "error_ratio_baseline"
+        elif "quantile_over_time" in promql:
+            field = "p95_baseline_ms"
+        elif "max_over_time" in promql:
+            field = "seen_last_hour"
+        elif "histogram_quantile" in promql:
+            field = "p95_latency_ms"
+        elif "/ sum by" in promql:
+            field = "error_ratio"
+        else:
+            field = "requests_per_second"
+        return [{"metric": {"service_name": service}, "value": [0, str(value)]} for service, value in rows[field].items()]
+
+    tools.run_prometheus_query = fake_query
+    tools._span_metrics_age_seconds = lambda: 30
+    tools._docker_containers = lambda: [{"Name": "/payment", "State": {"Status": "running"}},
+                                        {"Name": "/currency", "State": {"Status": "exited"}},
+                                        {"Name": "/fraud-detection", "State": {"Status": "running"}}]
+    tools._error_status_literal = "STATUS_CODE_ERROR"
+    try:
+        tools.reset_evidence_registry()
+        health = {row["service"]: row for row in tools.get_service_health(5)["services"]}
+        assert health["payment"]["status_hint"] == "ERRORS"                       # low traffic, but failing
+        assert health["currency"]["status_hint"].startswith("NOT_REPORTING: DOWN")  # container exited
+        assert health["fraud-detection"]["status_hint"].startswith("IDLE")         # a victim, not the cause
+        ranking = [name for name, _ in tools.last_deviation_ranking]
+        assert ranking[0] == "currency" and ranking.index("payment") < ranking.index("fraud-detection")
+    finally:
+        tools.run_prometheus_query, tools._docker_containers, tools._span_metrics_age_seconds = saved
 
 
 import tempfile  # noqa: E402

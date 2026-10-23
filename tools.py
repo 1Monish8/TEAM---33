@@ -153,12 +153,28 @@ def get_service_health(window_minutes=5):
             if value is not None:
                 if field.startswith("error_ratio"):
                     value = min(1.0, max(0.0, value))  # a ratio of two rates can overshoot briefly when a series goes stale
-                row[field] = round(value, 4 if field.startswith("error_ratio") else 1)
+                # rates keep 4 decimals: payment runs at ~0.04 req/s, and rounding that to 0.0 made it look silent
+                row[field] = round(value, 1) if field.startswith("p95") else round(value, 4)
             timestamps[service_name] = _now_iso(float(result_row["value"][0]))
 
+    # A service can go silent for two very different reasons: it is DOWN, or nothing is calling it any more
+    # (with currency stopped, checkout fails before it reaches payment, so payment goes silent too). Docker tells
+    # them apart; ranking both as "down" pointed the reviewer at the victims instead of the cause.
+    container_state = {c["Name"].lstrip("/"): c["State"].get("Status") for c in _docker_containers()}
     for row in rows.values():
-        if row["requests_per_second"] == 0.0:
-            row["status_hint"] = "NOT_REPORTING (seen in last hour, no spans now: likely down)"
+        stopped = container_state.get(row["service"]) not in (None, "running")
+        if stopped:
+            # Docker knows at once; the 5-minute rate still contains spans from before the stop for a while
+            row["status_hint"] = "NOT_REPORTING: DOWN (its container is %s)" % container_state[row["service"]]
+        elif row["requests_per_second"] == 0.0 and not row["error_ratio"]:
+            state = container_state.get(row["service"])
+            if state and state != "running":
+                row["status_hint"] = "NOT_REPORTING: DOWN (its container is %s)" % state
+            elif state == "running":
+                row["status_hint"] = ("IDLE (container running, but no spans: nothing upstream is calling it; "
+                                      "usually a victim of a failure further up, not the cause)")
+            else:
+                row["status_hint"] = "NOT_REPORTING (seen in last hour, no spans now: likely down)"
         elif row["service"] in CLIENT_SERVICES:
             # traffic generators: their errors/latency only mirror downstream services (~5% errors even when healthy)
             row["status_hint"] = "ok (client: its errors and latency reflect downstream services, never the root cause)"
@@ -186,10 +202,16 @@ def get_service_health(window_minutes=5):
     last_deviation_ranking[:] = [(row["service"], row["deviation_score"]) for row in ordered
                                  if row["service"] not in CLIENT_SERVICES]
     for row in ordered[: config.MAX_ITEMS_PER_TOOL_RESULT]:
-        if row["status_hint"].startswith("ok"):
+        if row["status_hint"].startswith(("ok", "IDLE", "unknown")):
             continue  # only unhealthy rows are worth citing; keeps the registry small
         metric_name = "error_ratio" if row["status_hint"] == "ERRORS" else (
             "p95_latency_ms" if row["status_hint"].startswith(("SLOW", "SLOWER")) else "requests_per_second")
+        if row["status_hint"].startswith("NOT_REPORTING: DOWN"):
+            row["ref"] = register_evidence_item("metric", {
+                "service": row["service"], "metric": "container_state", "value": container_state.get(row["service"]),
+                "promql": "docker inspect %s (State.Status)" % row["service"], "timestamp": _now_iso(),
+                "deviation_score": row["deviation_score"]})
+            continue
         row["ref"] = register_evidence_item("metric", {
             "service": row["service"],
             "metric": metric_name,
@@ -234,7 +256,7 @@ def _is_slower_than_baseline(row):
     # here labelled accounting, a Kafka batch consumer that always sits at ~15 s, SLOW on every run and
     # cost us three confidently-wrong answers on Day 1.)
     p95, baseline = row["p95_latency_ms"], row["p95_baseline_ms"]
-    if not p95 or p95 < 500:
+    if not p95 or p95 < 500 or not _enough_traffic_for_latency(row):
         return False
     if baseline is None:
         return False
@@ -243,7 +265,7 @@ def _is_slower_than_baseline(row):
 
 def _is_much_slower_than_its_normal(row):
     p95, baseline = row["p95_latency_ms"], row["p95_baseline_ms"]
-    return bool(p95 and baseline and p95 >= 20 and p95 >= 3 * baseline)
+    return bool(p95 and baseline and p95 >= 20 and p95 >= 3 * baseline and _enough_traffic_for_latency(row))
 
 
 def _deviation_score(row):
@@ -253,13 +275,25 @@ def _deviation_score(row):
     # failing beats one that got slower.
     if row["status_hint"].startswith("NOT_REPORTING"):
         return 10.0
+    if row["status_hint"].startswith("IDLE"):
+        return 0.5  # silent only because its callers stopped: a symptom of something else
     if row["service"] in CLIENT_SERVICES:
         return 0.0
     error_delta = max(0.0, row["error_ratio"] - (row["error_ratio_baseline"] or 0.0))
     latency_excess = 0.0
-    if row["p95_latency_ms"] and row["p95_baseline_ms"]:
-        latency_excess = max(0.0, row["p95_latency_ms"] / max(row["p95_baseline_ms"], 1.0) - 1.0)
+    if row["p95_latency_ms"] and row["p95_baseline_ms"] and _enough_traffic_for_latency(row):
+        # capped: one sparse histogram must not swamp the ranking (a p95 of 500 ms against 1 ms said "499")
+        latency_excess = min(50.0, max(0.0, row["p95_latency_ms"] / max(row["p95_baseline_ms"], 1.0) - 1.0))
     return round(max(error_delta * 20.0, latency_excess), 3)
+
+
+MIN_RPS_FOR_LATENCY = 0.1
+
+
+def _enough_traffic_for_latency(row):
+    # A p95 from a handful of spans snaps to a histogram bucket edge: payment at ~0.04 req/s once "deviated" 499x.
+    # Below ~6 calls a minute, latency is not evidence either way (errors still are).
+    return (row.get("requests_per_second") or 0) >= MIN_RPS_FOR_LATENCY
 
 
 def _health_sort_key(row):
