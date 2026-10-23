@@ -68,6 +68,20 @@ def test_diagnosed_without_evidence_on_root_service_is_rejected():
     assert diagnosis is None and "payment" in problem
 
 
+def test_stale_evidence_does_not_count_toward_confidence():
+    import time
+    tools.reset_evidence_registry()
+    old_trace = tools.register_evidence_item("trace", {"trace_id": "old", "service": "cart", "span_name": "EmptyCart",
+                                                       "duration_ms": 1.0, "status": "ERROR", "exception": "redis",
+                                                       "timestamp": "2026-10-23T00:00:00Z"})
+    old_log = tools.register_evidence_item("log", {"timestamp": "2026-10-23T00:00:01Z", "service": "cart",
+                                                   "severity": "Error", "message": "Wasn't able to connect to redis"})
+    run = dict(_run(), started=time.time())
+    arguments = dict(_args([old_trace, old_log]), root_cause_service="cart")
+    diagnosis, problem = agent.build_diagnosis(arguments, run)
+    assert diagnosis is None and "CURRENT" in problem  # only stale evidence -> cannot claim diagnosed
+
+
 def test_deepest_failing_span_is_the_callee_not_the_frontend():
     spans = [
         {"span_id": "1", "parent_span_id": None, "service": "frontend", "has_error": True},

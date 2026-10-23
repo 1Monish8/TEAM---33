@@ -87,6 +87,19 @@ def _log(*parts):
     print(*parts, file=sys.stderr, flush=True)
 
 
+STALE_EVIDENCE_MINUTES = 10
+
+
+def _is_stale(evidence_item, run):
+    # True when the item's own timestamp is well before this investigation started
+    stamp = str(evidence_item.get("timestamp") or "")[:19]
+    try:
+        moment = datetime.datetime.strptime(stamp, "%Y-%m-%dT%H:%M:%S").replace(tzinfo=datetime.timezone.utc)
+    except ValueError:
+        return False  # no timestamp: cannot tell, do not penalise
+    return moment.timestamp() < run["started"] - STALE_EVIDENCE_MINUTES * 60
+
+
 def _label_for(confidence):
     return "high" if confidence >= 0.75 else "medium" if confidence >= 0.5 else "low"
 
@@ -109,13 +122,20 @@ def build_diagnosis(arguments, run):
             record["why_it_matters"] = str(item["why_it_matters"])[:300]
         evidence.append(record)
 
-    # Calibration: high needs >= 2 independent kinds of evidence naming the root-cause service.
+    # Calibration: high needs >= 2 independent kinds of evidence naming the root-cause service,
+    # and only CURRENT evidence counts: anything from before the incident window belongs to another incident.
     notes = []
-    kinds_naming_root = {e["kind"] for e in evidence if root_service and e.get("service") == root_service}
+    stale = [e["reference"] for e in evidence if _is_stale(e, run)]
+    if stale:
+        notes.append("evidence older than %d min before the investigation does not count: %s"
+                     % (STALE_EVIDENCE_MINUTES, ", ".join(stale)))
+    kinds_naming_root = {e["kind"] for e in evidence
+                         if root_service and e.get("service") == root_service and e["reference"] not in stale}
     confidence = max(0.0, min(1.0, float(arguments.get("confidence", 0.3))))
     if status == "diagnosed" and not kinds_naming_root:
-        return None, ("status=diagnosed but none of the cited evidence is about '" + str(root_service)
-                      + "'. Cite evidence that names the root-cause service, or submit status=escalated.")
+        return None, ("status=diagnosed but none of the cited CURRENT evidence is about '" + str(root_service)
+                      + "' (evidence from more than %d minutes ago belongs to an earlier incident). Cite recent evidence "
+                      "that names the root-cause service, or submit status=escalated." % STALE_EVIDENCE_MINUTES)
     if len(kinds_naming_root) < 2 and confidence > 0.7:
         notes.append("confidence capped from %.2f to 0.70: only %d evidence kind(s) name %s"
                      % (confidence, len(kinds_naming_root), root_service))

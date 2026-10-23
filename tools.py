@@ -120,6 +120,16 @@ def get_service_health(window_minutes=5):
             "(rate(traces_span_metrics_duration_milliseconds_bucket[" + window + "])))"
         ),
         "seen_last_hour": "max by (service_name) (max_over_time(traces_span_metrics_calls_total[60m]))",
+        # baselines = median over the last hour, so chronic behaviour is not mistaken for the incident
+        # (e.g. accounting's p95 is always ~15 s: it measures Kafka queue wait)
+        "error_ratio_baseline": (
+            "quantile_over_time(0.5, (sum by (service_name) (rate(traces_span_metrics_calls_total{status_code=\"" + error_code
+            + "\"}[5m])) / sum by (service_name) (rate(traces_span_metrics_calls_total[5m])))[60m:1m])"
+        ),
+        "p95_baseline_ms": (
+            "quantile_over_time(0.5, (histogram_quantile(0.95, sum by (service_name, le) "
+            "(rate(traces_span_metrics_duration_milliseconds_bucket[5m]))))[60m:1m])"
+        ),
     }
     rows = {}
     timestamps = {}
@@ -131,12 +141,13 @@ def get_service_health(window_minutes=5):
             value = float(result_row["value"][1])
             if value != value:  # NaN: no traffic, not an error
                 value = None
-            row = rows.setdefault(service_name, {"service": service_name, "error_ratio": 0.0,
-                                                 "requests_per_second": 0.0, "p95_latency_ms": None})
+            row = rows.setdefault(service_name, {"service": service_name, "error_ratio": 0.0, "error_ratio_baseline": None,
+                                                 "requests_per_second": 0.0, "p95_latency_ms": None,
+                                                 "p95_baseline_ms": None})
             if field == "seen_last_hour":
                 continue
             if value is not None:
-                row[field] = round(value, 4 if field == "error_ratio" else 2)
+                row[field] = round(value, 4 if field.startswith("error_ratio") else 1)
             timestamps[service_name] = _now_iso(float(result_row["value"][0]))
 
     for row in rows.values():
@@ -145,10 +156,14 @@ def get_service_health(window_minutes=5):
         elif row["service"] in CLIENT_SERVICES:
             # traffic generators: their errors/latency only mirror downstream services (~5% errors even when healthy)
             row["status_hint"] = "ok (client: its errors and latency reflect downstream services, never the root cause)"
-        elif row["error_ratio"] >= 0.05:
+        elif row["error_ratio"] >= 0.05 and row["error_ratio"] >= (row["error_ratio_baseline"] or 0) + 0.03:
             row["status_hint"] = "ERRORS"
-        elif row["p95_latency_ms"] and row["p95_latency_ms"] >= 1000:
+        elif row["error_ratio"] >= 0.05:
+            row["status_hint"] = "ok (chronic errors: same as its last-hour baseline, not this incident)"
+        elif _is_slower_than_baseline(row):
             row["status_hint"] = "SLOW"
+        elif row["p95_latency_ms"] and row["p95_latency_ms"] >= 1000:
+            row["status_hint"] = "ok (chronically slow: same as its last-hour baseline, normal for this service)"
         else:
             row["status_hint"] = "ok"
 
@@ -164,8 +179,18 @@ def get_service_health(window_minutes=5):
             "value": row[metric_name],
             "promql": queries[metric_name],
             "timestamp": timestamps.get(row["service"], _now_iso()),
+            "baseline": row["error_ratio_baseline"] if metric_name == "error_ratio" else row["p95_baseline_ms"],
         })
-    return {"window": _window(window_minutes), "services": ordered[: config.MAX_ITEMS_PER_TOOL_RESULT * 2]}
+    return {"window": _window(window_minutes), "services": ordered[: config.MAX_ITEMS_PER_TOOL_RESULT * 2],
+            "note": "*_baseline = median of the last hour. Only a change from baseline is evidence of this incident."}
+
+
+def _is_slower_than_baseline(row):
+    # slow = p95 at least 500 ms AND at least double its own last-hour median
+    p95, baseline = row["p95_latency_ms"], row["p95_baseline_ms"]
+    if not p95 or p95 < 500:
+        return False
+    return baseline is None or p95 >= 2 * baseline
 
 
 def _health_sort_key(row):
@@ -231,6 +256,7 @@ def get_container_health(window_minutes=15):
 
     if names["cpu"]:
         collect("cpu_cores_used", "max by (container_name) (avg_over_time(" + names["cpu"] + "[2m]))")
+        collect("cpu_baseline", "max by (container_name) (quantile_over_time(0.5, " + names["cpu"] + "[60m]))")
     if names["memory"] and names["memory_limit"]:
         collect("memory_pct_of_limit",
                 "max by (container_name) (" + names["memory"] + ") / max by (container_name) (" + names["memory_limit"] + ") * 100")
@@ -258,6 +284,7 @@ def get_container_health(window_minutes=15):
             "restart_count": container.get("RestartCount", 0),
             "cpu_limit_cores": round(nano_cpus / 1e9, 3) if nano_cpus else None,
             "cpu_cores_used": metrics.get("cpu_cores_used"),
+            "cpu_baseline": metrics.get("cpu_baseline"),
             "memory_pct_of_limit": metrics.get("memory_pct_of_limit"),
             "uptime_resets_in_window": metrics.get("uptime_resets_in_window"),
         }
@@ -268,8 +295,14 @@ def get_container_health(window_minutes=15):
             problems.append("OOM_KILLED")
         if (metrics.get("uptime_resets_in_window") or 0) >= 2 or row["restart_count"] >= 2:
             problems.append("RESTART_LOOP")
+        elif row["restart_count"] >= 1 and row["uptime_seconds"] < window_minutes * 60:
+            # Docker's restart policy brought it back: it CRASHED (e.g. memory leak -> OOM) during the window
+            problems.append("CRASHED_AND_RESTARTED (restarted by Docker %d min ago)" % (row["uptime_seconds"] // 60))
         elif state.get("Running") and row["uptime_seconds"] < 120 and not stack_restart:
             problems.append("JUST_RESTARTED (uptime %ds)" % row["uptime_seconds"])
+        cpu_now, cpu_base = row["cpu_cores_used"] or 0, row["cpu_baseline"] or 0
+        if name not in CLIENT_SERVICES and cpu_now >= 0.5 and cpu_now >= 3 * max(cpu_base, 0.1):
+            problems.append("CPU_SPIKE (%.2f vs baseline %.2f)" % (cpu_now, cpu_base))
         if (row["memory_pct_of_limit"] or 0) >= 98:  # JVMs (kafka) idle at ~95%
             problems.append("MEMORY_NEAR_LIMIT")
         if row["cpu_limit_cores"] is not None and row["cpu_limit_cores"] < 0.5:
@@ -278,7 +311,9 @@ def get_container_health(window_minutes=15):
         if problems:
             source_query = "docker inspect " + name
             value = row["state"]
-            if problems[0].startswith(("RESTART_LOOP", "JUST_RESTARTED")):
+            if problems[0].startswith("CPU_SPIKE"):
+                source_query, value = used_queries.get("cpu_cores_used", source_query), row["cpu_cores_used"]
+            elif problems[0].startswith(("RESTART_LOOP", "JUST_RESTARTED", "CRASHED_AND_RESTARTED")):
                 source_query, value = used_queries.get("uptime_resets_in_window", source_query), row["uptime_resets_in_window"]
             elif problems[0] == "MEMORY_NEAR_LIMIT":
                 source_query, value = used_queries.get("memory_pct_of_limit", source_query), row["memory_pct_of_limit"]
@@ -298,8 +333,10 @@ def get_container_health(window_minutes=15):
         "window": _window(window_minutes),
         "containers_checked": len(rows),
         "containers_with_problems": [row for row in rows if row["problems"]],
-        "busiest_cpu": [{"container": r["container"], "cpu_cores_used": r["cpu_cores_used"]} for r in rows if not r["problems"]][:5],
-        "note": "cpu_cores_used is in cores (1.0 = one full core). A tiny cpu_limit_cores with high latency = CPU starvation.",
+        "busiest_cpu": [{"container": r["container"], "cpu_cores_used": r["cpu_cores_used"], "cpu_baseline": r["cpu_baseline"]}
+                        for r in rows if not r["problems"]][:5],
+        "note": ("cpu_* are docker_stats utilisation; compare cpu_cores_used with cpu_baseline (last-hour median). "
+                 "A tiny cpu_limit_cores with high latency = CPU starvation."),
     }
     if stack_restart:
         result["stack_restart"] = ("%d of %d containers started within the window: the whole stack was restarted, "
@@ -448,7 +485,7 @@ def search_traces(service, only_errors=True, min_duration_ms=None, limit=10, win
             "ref": register_evidence_item("trace", {
                 "trace_id": trace_id, "service": culprit["service"], "span_name": culprit["operation"],
                 "duration_ms": culprit["duration_ms"], "status": "ERROR" if culprit["has_error"] else "OK",
-                "exception": culprit["exception"],
+                "exception": culprit["exception"], "timestamp": _now_iso(culprit["start_us"] / 1_000_000),
             }),
         })
         if len(summaries) >= min(int(limit), config.MAX_ITEMS_PER_TOOL_RESULT):
@@ -474,6 +511,7 @@ def get_trace(trace_id):
             "ref": register_evidence_item("trace", {
                 "trace_id": trace_id, "service": span["service"], "span_name": span["operation"],
                 "duration_ms": span["duration_ms"], "status": "ERROR", "exception": span["exception"],
+                "timestamp": _now_iso(span["start_us"] / 1_000_000),
             }),
         })
     hotspot_out = None
@@ -484,7 +522,7 @@ def get_trace(trace_id):
             "ref": register_evidence_item("trace", {
                 "trace_id": trace_id, "service": hotspot["service"], "span_name": hotspot["operation"],
                 "duration_ms": hotspot["duration_ms"], "status": "ERROR" if hotspot["has_error"] else "OK",
-                "exception": hotspot["exception"],
+                "exception": hotspot["exception"], "timestamp": _now_iso(hotspot["start_us"] / 1_000_000),
             }),
         }
 
