@@ -142,10 +142,11 @@ def get_service_health(window_minutes=5):
     for row in rows.values():
         if row["requests_per_second"] == 0.0:
             row["status_hint"] = "NOT_REPORTING (seen in last hour, no spans now: likely down)"
+        elif row["service"] in CLIENT_SERVICES:
+            # traffic generators: their errors/latency only mirror downstream services (~5% errors even when healthy)
+            row["status_hint"] = "ok (client: its errors and latency reflect downstream services, never the root cause)"
         elif row["error_ratio"] >= 0.05:
             row["status_hint"] = "ERRORS"
-        elif row["service"] in CLIENT_SERVICES:
-            row["status_hint"] = "ok (client: its latency includes every downstream call)"
         elif row["p95_latency_ms"] and row["p95_latency_ms"] >= 1000:
             row["status_hint"] = "SLOW"
         else:
