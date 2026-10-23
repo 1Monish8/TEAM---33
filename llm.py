@@ -153,6 +153,11 @@ def chat(messages, tools=None, tool_choice="auto", temperature=0.0):
                 # a daily cap will not clear by waiting: change model (bursts: wait as long as Groq says, below)
                 if _is_daily_cap(error) and _switch_to_fallback(error):
                     continue
+                # the FALLBACK is daily-capped too: Groq's daily window rolls, so the primary may have room again
+                if _is_daily_cap(error) and _fallback_in_use:
+                    global _fallback_until
+                    _fallback_until = 0.0
+                    continue
             if wait_seconds is None:
                 raise
             wait_seconds = _retry_after_seconds(error, wait_seconds)
