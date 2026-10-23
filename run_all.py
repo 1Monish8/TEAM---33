@@ -29,6 +29,23 @@ def faultctl(*args):
     subprocess.run(FAULTCTL + list(args), check=True)
 
 
+def wait_for_quiet_baseline(max_wait_seconds=600):
+    # Never inject into a stack that is still booting (e.g. kafka creating its topics):
+    # the agent would correctly diagnose the startup noise instead of the injected fault.
+    import tools
+    deadline = time.time() + max_wait_seconds
+    while True:
+        tools.reset_evidence_registry()
+        noisy = [row["service"] for row in tools.get_service_health(3)["services"] if row["status_hint"] == "ERRORS"]
+        if not noisy:
+            return
+        if time.time() > deadline:
+            print("baseline still noisy after %ds (%s); injecting anyway" % (max_wait_seconds, ", ".join(noisy)), flush=True)
+            return
+        print("baseline not quiet yet (%s); waiting" % ", ".join(noisy), flush=True)
+        time.sleep(30)
+
+
 def score(name, incident, diagnosis):
     said = diagnosis["root_cause"]["service"]
     correct = said in incident["accept"]
@@ -77,6 +94,7 @@ def main():
         incident = INCIDENTS[name]
         print("\n=== %s: inject, wait %ds" % (name, WAIT_SECONDS), flush=True)
         faultctl("reset")
+        wait_for_quiet_baseline()
         faultctl("inject", name)
         time.sleep(WAIT_SECONDS)
         try:

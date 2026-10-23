@@ -1,11 +1,21 @@
 # llm.py — the only file that talks to the LLM provider.
 # Groq exposes an OpenAI-compatible API, so we use the openai SDK with a different base_url.
 # Swapping provider = change BASE_URL / MODEL_NAME in .env.local, nothing else.
+import sys
+import time
+
+import openai
 from openai import OpenAI
 
 import config
 
 _client = None
+
+# Venue wifi drops for longer than the SDK's own quick retries cover. These errors are transient,
+# so wait and try again instead of losing the whole investigation. Anything else (bad request,
+# bad key) is a real bug and is raised immediately.
+TRANSIENT_ERRORS = (openai.APIConnectionError, openai.APITimeoutError, openai.RateLimitError, openai.InternalServerError)
+BACKOFF_SECONDS = [5, 15, 30, 60, 90]
 
 
 def get_client():
@@ -26,8 +36,16 @@ def chat(messages, tools=None, tool_choice="auto", temperature=0.0):
     if tools:
         request["tools"] = tools
         request["tool_choice"] = tool_choice
-    response = get_client().chat.completions.create(**request)
-    return response.choices[0].message
+    for attempt, wait_seconds in enumerate(BACKOFF_SECONDS + [None], start=1):
+        try:
+            response = get_client().chat.completions.create(**request)
+            return response.choices[0].message
+        except TRANSIENT_ERRORS as error:
+            if wait_seconds is None:
+                raise
+            print("  LLM call failed (%s), retry %d in %ds" % (type(error).__name__, attempt, wait_seconds),
+                  file=sys.stderr, flush=True)
+            time.sleep(wait_seconds)
 
 
 def assistant_message_to_dict(message):
