@@ -1,6 +1,15 @@
 # TEAM-33 · Incident Zero — AI On-Call Engineer
 
-> **Status (Day 2):** RESULTS_PLACEHOLDER
+> **Day 2 status**
+> - **Works (verified live):**
+>   - alert → diagnosis → reviewer → dry run → human `y` → act → **verified recovery** (`currency-stopped`: restart; `payment-failure`: write-only flag fix, deviation 20 → 0);
+>   - human `n` changes nothing;
+>   - `KILL_SWITCH` stops a run with 0 actions;
+>   - an invented `trace-9999` is rejected live.
+> - **Measured:** confidently-wrong answers **3 → 0**; the *high*-confidence band went from 50% to 100% accurate (small sample). After-sweep: 4/8 correct, 2 honest escalations, 2 wrong at medium. See `evaluation-note.md`.
+> - **Doesn't work yet / not measured:** Kafka incidents. The last fixes (infrastructure consistency check, windowed restart loop) aren't yet measured, because Groq's free tier allows 200k tokens per model per day and one investigation costs 20–35k.
+> - **First thing to do:** get a higher-limit key (the organisers', or `API_KEY_FALLBACK` from another account), then run `python run_all.py` to measure the final code on all 12.
+> - **Before the demo:** `python check_stack.py --fix` must say ALL GREEN; follow `docs/demo-script-day2.md`.
 
 An agent that takes a production alert on the OpenTelemetry Demo and does the on-call engineer's first hour:
 1. **Investigate** with real telemetry tools (metrics, traces, logs, container health).
@@ -32,7 +41,7 @@ python3.11 -m venv .venv && .venv/bin/pip install -r requirements.txt
 #   optional fallback:       export API_KEY_FALLBACK="..."  export MODEL_NAME_FALLBACK="..."
 .venv/bin/python check_stack.py          # pre-flight: every data source fresh -> ALL GREEN
 .venv/bin/python smoke_test_llm.py       # key + tool calling -> PASS
-.venv/bin/python tests/test_offline.py   # 16 tests, no stack, no LLM
+.venv/bin/python tests/test_offline.py   # 20 tests, no stack, no LLM
 
 # 3. the full loop on a live fault (Checkpoint 3): diagnose -> review -> dry run -> you approve -> act -> verify
 ./demo.sh                                # currency-stopped: restart_service, verified recovery
@@ -154,7 +163,7 @@ If recovery isn't confirmed, the inverse action runs (for example, restoring the
 | `schema.json`, `report.py` | Output schema (provisional), validation, readable report |
 | `check_stack.py`, `calibration.py`, `run_all.py`, `demo.sh`, `run_day1.sh` | Operator tooling (the agent never calls these) |
 | `practice/` | Stand-in faultctl and the practice incidents. Expected answers are read **only** by the scorers. |
-| `tests/test_offline.py` | 16 tests: evidence guard, calibration, stale evidence, deepest span, flag redaction, baselines, and every action-loop path (approve, reject, dry run, kill switch, low confidence, recovery, rollback, hallucination demo) |
+| `tests/test_offline.py` | 20 tests: evidence guard, calibration, stale evidence, deepest span, flag redaction, baselines, DOWN vs IDLE, the infrastructure consistency check, grounded reviewer disputes, API-rejected tool calls, and every action-loop path (approve, reject, dry run, kill switch, low confidence, recovery, rollback, hallucination demo) |
 | `docs/` | `architecture.png` (one page), `flow.png`, `TEAM_SPLIT.md`, `mentor-walkthrough.md`, `demo-script-day2.md`, `DAY1_REPORT.md`, `kickoff-and-mentor-questions.md` |
 | `reports/` | Every sweep (scoring table, `verdict.json`, transcripts) and the checkpoint runs |
 | `evaluation-note.md` | What it got right and wrong, before and after the fixes, plus the calibration table |
@@ -170,7 +179,7 @@ If recovery isn't confirmed, the inverse action runs (for example, restoring the
   - In those cases verification reports "not recovered" and the agent escalates. That's the intended, honest outcome.
 - **Flag toggling has no automatic rollback**, because restoring the previous variant would mean reading flag state. A failed flag fix escalates instead.
 - **Kafka incidents are the weakest area:** consumer lag isn't exposed as a metric the tools read, so the agent relies on fraud-detection/accounting traces and logs.
-- **Rate limits:** 8,000 tokens/minute makes a paced investigation take a few minutes. The fallback model covers a daily cap.
+- **Rate limits (the biggest operational risk):** Groq's free tier allows 8,000 tokens/minute **and 200,000 tokens/day per model**. One investigation costs about 20–35k tokens, so each model handles roughly 6–8 investigations a day. Pacing handles the per-minute limit. A daily cap switches to the fallback model, and back once the cap clears. Both models capped out during our overnight testing. **For the hidden test, use a key with a higher limit** (the organisers', or `API_KEY_FALLBACK` from another account).
 - **Collector freeze:** span metrics stopped once after about 3 hours. The tool reports it (`pipeline_warning`) and `check_stack.py --fix` repairs it, but the cause is upstream.
 
 ## Team

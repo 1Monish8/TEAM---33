@@ -1,0 +1,9 @@
+{
+  "incident": "cart-cache-down",
+  "expected": "valkey-cart",
+  "agent_said": "frontend-proxy",
+  "correct": false,
+  "escalated": false,
+  "confidence_value": 0.6,
+  "verdict": "WRONG"
+}

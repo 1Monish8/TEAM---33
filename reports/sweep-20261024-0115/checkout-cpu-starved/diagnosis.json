@@ -1,0 +1,88 @@
+{
+  "incident_id": "checkout-cpu-starved",
+  "generated_at": "2026-10-23T21:41:09Z",
+  "alert": "Latency p95 above threshold on checkout",
+  "status": "diagnosed",
+  "root_cause": {
+    "service": "checkout",
+    "fault_type": "resource_exhaustion",
+    "summary": "The checkout service is running with a CPU limit of 0.03 cores, yet it consumes over 1 core, causing the publish orders step to take ~11s. This slowdown propagates as 15s timeouts in the frontend\u2011proxy, leading to the observed latency alert. The root cause is the CPU limit on the checkout container."
+  },
+  "symptom_services": [],
+  "confidence": 0.9,
+  "confidence_label": "high",
+  "evidence": [
+    {
+      "service": "checkout",
+      "metric": "p95_latency_ms",
+      "value": 15000.0,
+      "promql": "histogram_quantile(0.95, sum by (service_name, le) (rate(traces_span_metrics_duration_milliseconds_bucket[5m])))",
+      "timestamp": "2026-10-23T21:11:18Z",
+      "baseline": 70.0,
+      "deviation_score": 50.0,
+      "reference": "metric-8",
+      "kind": "metric",
+      "why_it_matters": "checkout p95 latency 15s vs baseline 70ms"
+    },
+    {
+      "service": "checkout",
+      "metric": "container.cpu_limited",
+      "value": 0.03,
+      "promql": "docker inspect checkout",
+      "timestamp": "2026-10-23T21:40:05Z",
+      "reference": "metric-11",
+      "kind": "metric",
+      "why_it_matters": "checkout container CPU_LIMITED (0.03 cores) while using 1.163 cores"
+    },
+    {
+      "trace_id": "0e89089dd9881240c44985343a5263bc",
+      "service": "checkout",
+      "span_name": "publish orders",
+      "duration_ms": 11600.3,
+      "status": "OK",
+      "exception": null,
+      "timestamp": "2026-10-23T21:08:48Z",
+      "reference": "trace-10",
+      "kind": "trace",
+      "why_it_matters": "checkout publish orders hotspot 11.6s"
+    }
+  ],
+  "proposed_action": {
+    "action": "restart_service",
+    "target": "checkout",
+    "parameters": {},
+    "reason": "Checkout container is CPU\u2011starved due to a very low CPU limit, causing the publish orders operation to take ~11s and trigger upstream timeouts.",
+    "requires_approval": true
+  },
+  "investigation": {
+    "tool_calls": 6,
+    "tools_used": [
+      "get_container_health",
+      "get_service_health",
+      "get_trace",
+      "search_logs",
+      "search_traces"
+    ],
+    "model": "openai/gpt-oss-120b, openai/gpt-oss-20b",
+    "duration_seconds": 1976.3,
+    "calibration_notes": []
+  },
+  "timeline": [
+    {
+      "time": "2026-10-23T21:08:13Z",
+      "event": "Alert received: Latency p95 above threshold on checkout"
+    },
+    {
+      "time": "2026-10-23T21:41:09Z",
+      "event": "Diagnosis submitted after 6 tool calls"
+    }
+  ],
+  "prevention": "Increase the CPU limit for the checkout container or scale the service.",
+  "review": {
+    "ran": true,
+    "disputed": false,
+    "better_candidate": null,
+    "verdict": "",
+    "model": "openai/gpt-oss-20b"
+  }
+}

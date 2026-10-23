@@ -1,0 +1,43 @@
+{
+  "incident_id": "payment-unreachable",
+  "generated_at": "2026-10-23T20:31:34Z",
+  "alert": "Checkout failures reported by users",
+  "status": "escalated",
+  "root_cause": {
+    "service": null,
+    "fault_type": "unknown",
+    "summary": "Automatic escalation: no accepted diagnosis within the iteration/rejection budget. The cited items are the most suspicious signals the tools returned; a human should take over."
+  },
+  "symptom_services": [],
+  "confidence": 0.2,
+  "confidence_label": "low",
+  "evidence": [],
+  "proposed_action": {
+    "action": "escalate_to_human",
+    "target": null,
+    "parameters": {},
+    "reason": "The agent could not reach a confident, evidence-backed diagnosis.",
+    "requires_approval": true
+  },
+  "investigation": {
+    "tool_calls": 12,
+    "tools_used": [
+      "get_container_health",
+      "get_service_health",
+      "search_traces"
+    ],
+    "model": "openai/gpt-oss-20b",
+    "duration_seconds": 802.8,
+    "calibration_notes": []
+  },
+  "timeline": [
+    {
+      "time": "2026-10-23T20:18:11Z",
+      "event": "Alert received: Checkout failures reported by users"
+    },
+    {
+      "time": "2026-10-23T20:31:34Z",
+      "event": "Diagnosis submitted after 12 tool calls"
+    }
+  ]
+}

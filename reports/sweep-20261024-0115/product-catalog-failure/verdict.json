@@ -1,0 +1,9 @@
+{
+  "incident": "product-catalog-failure",
+  "expected": "product-catalog",
+  "agent_said": "product-catalog",
+  "correct": true,
+  "escalated": false,
+  "confidence_value": 0.6,
+  "verdict": "PASS"
+}

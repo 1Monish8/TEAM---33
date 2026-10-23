@@ -1,0 +1,9 @@
+{
+  "incident": "payment-failure",
+  "expected": "payment",
+  "agent_said": "payment",
+  "correct": false,
+  "escalated": true,
+  "confidence_value": 0.45,
+  "verdict": "ESCALATED"
+}

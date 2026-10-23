@@ -133,6 +133,6 @@
   <rect class="data" x="60" y="928" width="1080" height="98" rx="10"/>
   <text class="t" x="600" y="952" text-anchor="middle">Operator tooling (never callable by the agent)</text>
   <text class="s" x="600" y="974" text-anchor="middle">check_stack.py pre-flight (data sources fresh; --fix restarts a frozen collector) · practice/faultctl.py stand-in injector · run_all.py sweep (diagnosis only)</text>
-  <text class="s" x="600" y="994" text-anchor="middle">calibration.py: stated confidence vs actual accuracy across sweeps · demo.sh: Checkpoint 3 live run · tests/test_offline.py: 16 tests, no stack, no LLM</text>
+  <text class="s" x="600" y="994" text-anchor="middle">calibration.py: stated confidence vs actual accuracy across sweeps · demo.sh: Checkpoint 3 live run · tests/test_offline.py: 20 tests, no stack, no LLM</text>
   <text class="s" x="600" y="1014" text-anchor="middle">--yes auto-approves for unattended runs only, and is recorded as such in the report and the action log</text>
 </svg>

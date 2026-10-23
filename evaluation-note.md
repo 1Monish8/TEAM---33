@@ -52,13 +52,63 @@ Every correct answer came from the **error branch**: a fault that throws excepti
 
 ## 3. After: the Day 2 agent
 
-AFTER_PLACEHOLDER
+**Sweep `sweep-20261024-0115`**: the Day 2 code (all baseline fixes, reviewer, fallback). 8 of 12 incidents completed before **both models' daily token caps were exhausted** (Groq free tier: 200,000 tokens per model per day, and one investigation costs about 20–35k). Because the primary model was capped for most of the night, **almost every call ran on the fallback `gpt-oss-20b`**: at most one `gpt-oss-120b` call per incident. The model per call is recorded in each transcript.
+
+| Incident | Expected | Agent said | Confidence | Reviewer | Tool calls | Verdict |
+|---|---|---|---|---|---|---|
+| payment-failure | payment | payment | low 0.45 | — | 4 | ⚠️ escalated (right service, not claimed) |
+| cart-failure | cart | valkey-cart | medium 0.60 | disputed | 6 | ✅ (cart's own cache; accepted) |
+| product-catalog-failure | product-catalog | product-catalog | medium 0.60 | disputed | 4 | ✅ |
+| payment-unreachable | payment | — | low 0.20 | — | 12 | ⚠️ escalated (budget used up) |
+| currency-stopped | currency | currency | medium 0.70 | confirmed | 3 | ✅ |
+| cart-cache-down | valkey-cart | frontend-proxy | medium 0.60 | disputed | 4 | ❌ wrong, **not confident** |
+| shipping-restart-loop | shipping | kafka | medium 0.60 | disputed | 4 | ❌ wrong, **not confident** |
+| checkout-cpu-starved | checkout | checkout | **high 0.90** | confirmed | 6 | ✅ (a no-error infrastructure fault) |
+| kafka-queue-problems, homepage-flood, recommendation-cache-leak, ad-high-cpu | | | | | | not run: token quota exhausted |
+
+**4 of 8 correct, 2 honest escalations, 2 wrong at medium, 0 confidently wrong** (Day 1: 3 of 7 correct, **3 confidently wrong**, 1 crash).
+
+### What the remaining errors tell us, and what we already changed
+- **Both wrong answers came from the smaller fallback model ignoring evidence the tools did show:**
+  - In cart-cache-down, `get_container_health` reported `valkey-cart NOT_RUNNING`.
+  - In shipping-restart-loop it reported `shipping RESTART_LOOP`.
+  - In both cases the reviewer disputed the answer, so confidence stayed at medium (not confidently wrong).
+- **Fixed after this sweep (commit `dab1365`):** an *infrastructure consistency check*. If the run saw a demo container stopped, crashed or restart-looping and the diagnosis names something else, the first submission is challenged ("name it, or explain why it is unrelated"). It's the infrastructure twin of the evidence guard, aimed at exactly this failure.
+- **Also fixed (`dab1365`):** `kafka` was flagged RESTART_LOOP because Docker's restart count is a lifetime total. The check is now windowed. The reviewer had spotted the problem ("no Kafka restarts, restart_loop = 0.0").
+- **Not yet measured:** the consistency check, the windowed restart loop and the condensed prompt (`110f760`) landed after this sweep. Re-running the 4 unrun incidents plus the 4 imperfect ones needs about 200k tokens, which is one model's full daily budget. Command: `python run_all.py kafka-queue-problems homepage-flood recommendation-cache-leak ad-high-cpu payment-failure payment-unreachable cart-cache-down shipping-restart-loop`.
+- **Contaminated, and excluded:** `kafka-queue-problems` started while `checkout` was still CPU-starved, because the practice reset's `docker update --cpus 0` doesn't remove a limit on Docker 29 (fixed: `--cpus <all VM cores>`). Its partial run was discarded.
+
+### Speed
+On the Day 1 code, cart-failure took 12 tool calls and 748 s. On Day 2, typical investigations took 3–6 tool calls and 3–4 minutes, almost all of it waiting on the 8,000-tokens/minute limit. That's thanks to history compaction, realistic pacing and, later, a ~40% smaller system prompt. (checkout-cpu-starved's 1,976 s was spent waiting on daily-cap retries, not investigating.)
 
 ## 4. Calibration: does our stated confidence match how often we're right?
 
 `python calibration.py` (every sweep, before and after):
 
-CALIBRATION_PLACEHOLDER
+**Before (Day 1 code: sweeps 1635 and 2309):**
+
+| stated confidence | runs | correct | escalated | wrong | actual accuracy |
+|---|---|---|---|---|---|
+| high (0.75–1.0) | 6 | 3 | 0 | 3 | **50%** |
+| medium (0.5–0.75) | 2 | 2 | 0 | 0 | 100% |
+| low (0.0–0.5) | 0 | 0 | 0 | 0 | none claimed |
+
+Confidently wrong: **3** (ad-high-cpu → accounting, homepage-flood → accounting, recommendation-cache-leak → cart).
+
+**After (Day 2 code: sweep 20261024-0115):**
+
+| stated confidence | runs | correct | escalated | wrong | actual accuracy |
+|---|---|---|---|---|---|
+| high (0.75–1.0) | 1 | 1 | 0 | 0 | **100%** |
+| medium (0.5–0.75) | 5 | 3 | 0 | 2 | 60% |
+| low (0.0–0.5) | 2 | 0 | 2 | 0 | none claimed (both escalated) |
+
+Confidently wrong: **0**.
+
+**In plain words:**
+- On Day 1, when the agent said *high*, it was right half the time.
+- On Day 2, *high* was claimed once and was right. Every wrong answer was hedged at *medium*, and both cases where it wasn't sure were escalated rather than guessed.
+- **Read with care:** the after-sample is small (8 runs) and ran mostly on the fallback model, so the medium band (60%) is the honest weak spot, not a solved problem.
 
 ## 5. The action loop (Checkpoint 3), tested live
 

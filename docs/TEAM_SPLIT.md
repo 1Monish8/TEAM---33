@@ -175,7 +175,7 @@ The full Q&A list is at the end of `docs/mentor-walkthrough.md`.
 | **Devaki** (Tools) | `actions.py`, the baseline/deviation code in `tools.py` | The allowlist; the protected containers (why never Jaeger); `approved=True` set in exactly one place; why `scale_service` is refused on Compose; why a flag write has no automatic undo; `deviation_score`, and why a missing baseline fails *closed* |
 | **Monish** (Host) | `verify.py`, `check_stack.py`, `practice/faultctl.py` residue reset, `demo.sh` | Why verification waits 120 s and reads a fresh 2-min window; recovered True / False / **None = cannot tell**; the one re-check; the collector freeze and `--fix`; why reset restarts `ad` after `adHighCpu` |
 | **Tarun** (Loop) | `agent.py` act loop, reviewer, `llm.py` fallback and pacing | The four gates in order; the confidence gate (≥0.5, diagnosed); the reviewer prompt and the 0.60 cap; `--dry-run`, `--yes`, `--demo-hallucination`; history compaction; fallback to `gpt-oss-20b` |
-| **Member 4** (Output) | `schema.json` (`review`, `action_loop`), `report.py` action-loop section, `tests/test_offline.py` (16 tests) | What each Day 2 test proves (reject, dry run, kill switch, low confidence, recovery, rollback, hallucination) |
+| **Member 4** (Output) | `schema.json` (`review`, `action_loop`), `report.py` action-loop section, `tests/test_offline.py` (20 tests) | What each Day 2 test proves (reject, dry run, kill switch, low confidence, recovery, rollback, hallucination) |
 | **Member 5** (Evidence) | `calibration.py`, `evaluation-note.md`, `docs/architecture.png`, `docs/demo-script-day2.md` | Before and after numbers; the calibration table and what "confidently wrong" means; the 5-minute demo script |
 
 **Day 2 interview questions to practise:**

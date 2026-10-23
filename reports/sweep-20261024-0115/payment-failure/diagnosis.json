@@ -1,0 +1,87 @@
+{
+  "incident_id": "payment-failure",
+  "generated_at": "2026-10-23T19:51:46Z",
+  "alert": "Error rate above 5% on frontend checkout requests",
+  "status": "escalated",
+  "root_cause": {
+    "service": "payment",
+    "fault_type": "application_error",
+    "summary": "The payment service is rejecting checkout requests with an \"Invalid token\" error, causing the checkout service to propagate errors to the frontend. The container is healthy, but the application logic is misbehaving. A human needs to investigate the token validation logic or configuration."
+  },
+  "symptom_services": [
+    "checkout"
+  ],
+  "confidence": 0.45,
+  "confidence_label": "low",
+  "evidence": [
+    {
+      "service": "payment",
+      "metric": "error_ratio",
+      "value": 0.2857,
+      "promql": "sum by (service_name) (rate(traces_span_metrics_calls_total{status_code=\"STATUS_CODE_ERROR\"}[5m])) / sum by (service_name) (rate(traces_span_metrics_calls_total[5m]))",
+      "timestamp": "2026-10-23T19:47:38Z",
+      "baseline": 0.0588,
+      "deviation_score": 4.538,
+      "reference": "metric-1",
+      "kind": "metric",
+      "why_it_matters": "Payment error ratio 28.57% far above baseline"
+    },
+    {
+      "trace_id": "59c8e2fe24d4599db3b32f4fa1f88166",
+      "service": "payment",
+      "span_name": "charge",
+      "duration_ms": 0.9,
+      "status": "ERROR",
+      "exception": "Payment request failed. Invalid token. demo.user_context.loyalty_level=gold",
+      "timestamp": "2026-10-23T19:48:26Z",
+      "reference": "trace-2",
+      "kind": "trace",
+      "why_it_matters": "Deepest failing span shows payment charge error: Invalid token"
+    },
+    {
+      "timestamp": "2026-10-23T19:48:47.949Z",
+      "service": "payment",
+      "severity": "warn",
+      "message": "Payment request failed. Invalid token. demo.user_context.loyalty_level=gold",
+      "trace_id": "5b5c21b2531af31fd332ad70c89afb19",
+      "reference": "log-7",
+      "kind": "log",
+      "why_it_matters": "Log confirms payment request failed due to invalid token"
+    }
+  ],
+  "proposed_action": {
+    "action": "escalate_to_human",
+    "target": null,
+    "parameters": {},
+    "reason": "Payment service is returning application errors due to invalid token; cannot fix without further investigation.",
+    "requires_approval": true
+  },
+  "investigation": {
+    "tool_calls": 4,
+    "tools_used": [
+      "get_container_health",
+      "get_service_health",
+      "search_logs",
+      "search_traces"
+    ],
+    "model": "openai/gpt-oss-120b, openai/gpt-oss-20b",
+    "duration_seconds": 249.4,
+    "calibration_notes": [
+      "confidence capped from 0.80 to 0.45 because the agent escalated"
+    ]
+  },
+  "timeline": [
+    {
+      "time": "2026-10-23T19:47:37Z",
+      "event": "Alert received: Error rate above 5% on frontend checkout requests"
+    },
+    {
+      "time": "2026-10-23T19:48:47.949Z",
+      "event": "Earliest cited log line from payment"
+    },
+    {
+      "time": "2026-10-23T19:51:46Z",
+      "event": "Diagnosis submitted after 4 tool calls"
+    }
+  ]
+}

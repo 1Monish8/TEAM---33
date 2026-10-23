@@ -1,0 +1,9 @@
+{
+  "incident": "payment-unreachable",
+  "expected": "payment",
+  "agent_said": null,
+  "correct": false,
+  "escalated": true,
+  "confidence_value": 0.2,
+  "verdict": "ESCALATED"
+}

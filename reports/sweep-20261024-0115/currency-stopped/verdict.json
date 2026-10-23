@@ -1,0 +1,9 @@
+{
+  "incident": "currency-stopped",
+  "expected": "currency",
+  "agent_said": "currency",
+  "correct": true,
+  "escalated": false,
+  "confidence_value": 0.7,
+  "verdict": "PASS"
+}

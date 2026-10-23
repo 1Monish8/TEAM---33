@@ -1,0 +1,9 @@
+{
+  "incident": "cart-failure",
+  "expected": "cart",
+  "agent_said": "valkey-cart",
+  "correct": true,
+  "escalated": false,
+  "confidence_value": 0.6,
+  "verdict": "PASS"
+}

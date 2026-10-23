@@ -1,0 +1,9 @@
+{
+  "incident": "checkout-cpu-starved",
+  "expected": "checkout",
+  "agent_said": "checkout",
+  "correct": true,
+  "escalated": false,
+  "confidence_value": 0.9,
+  "verdict": "PASS"
+}

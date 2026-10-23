@@ -1,0 +1,91 @@
+{
+  "incident_id": "currency-stopped",
+  "generated_at": "2026-10-23T20:40:12Z",
+  "alert": "Error rate elevated on frontend",
+  "status": "diagnosed",
+  "root_cause": {
+    "service": "currency",
+    "fault_type": "service_down",
+    "summary": "The currency service container exited, so calls from frontend to get supported currencies fail, raising error rate on frontend. Restarting the currency container will restore functionality."
+  },
+  "symptom_services": [
+    "frontend",
+    "frontend-proxy",
+    "frontend-web"
+  ],
+  "confidence": 0.7,
+  "confidence_label": "medium",
+  "evidence": [
+    {
+      "service": "currency",
+      "metric": "container_state",
+      "value": "exited",
+      "promql": "docker inspect currency (State.Status)",
+      "timestamp": "2026-10-23T20:37:07Z",
+      "deviation_score": 10.0,
+      "reference": "metric-1",
+      "kind": "metric",
+      "why_it_matters": "Currency service marked NOT_REPORTING: DOWN"
+    },
+    {
+      "trace_id": "892f479f4962ec7401f6ec5ddb052daf",
+      "service": "frontend",
+      "span_name": "oteldemo.CurrencyService/GetSupportedCurrencies",
+      "duration_ms": 0.3,
+      "status": "ERROR",
+      "exception": null,
+      "timestamp": "2026-10-23T20:37:28Z",
+      "reference": "trace-2",
+      "kind": "trace",
+      "why_it_matters": "Deepest failing span is CurrencyService/GetSupportedCurrencies"
+    },
+    {
+      "service": "currency",
+      "metric": "container.not_running",
+      "value": "exited",
+      "promql": "docker inspect currency",
+      "timestamp": "2026-10-23T20:39:10Z",
+      "reference": "metric-11",
+      "kind": "metric",
+      "why_it_matters": "Currency container state exited"
+    }
+  ],
+  "proposed_action": {
+    "action": "restart_service",
+    "target": "currency",
+    "parameters": {},
+    "reason": "Currency service container exited, causing frontend errors",
+    "requires_approval": true
+  },
+  "investigation": {
+    "tool_calls": 3,
+    "tools_used": [
+      "get_container_health",
+      "get_service_health",
+      "search_traces"
+    ],
+    "model": "openai/gpt-oss-120b, openai/gpt-oss-20b",
+    "duration_seconds": 186.2,
+    "calibration_notes": [
+      "confidence capped from 0.90 to 0.70: only 1 evidence kind(s) name currency"
+    ]
+  },
+  "timeline": [
+    {
+      "time": "2026-10-23T20:37:06Z",
+      "event": "Alert received: Error rate elevated on frontend"
+    },
+    {
+      "time": "2026-10-23T20:40:12Z",
+      "event": "Diagnosis submitted after 3 tool calls"
+    }
+  ],
+  "prevention": "Add a restart policy or health check to keep currency service running",
+  "review": {
+    "ran": true,
+    "disputed": false,
+    "better_candidate": null,
+    "verdict": "CONFIRMED: The evidence shows the currency container exited and the deepest failing span is a call to CurrencyService/GetSupportedCurrencies, matching the claimed root cause.",
+    "model": "openai/gpt-oss-20b"
+  }
+}
