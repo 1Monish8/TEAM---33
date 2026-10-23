@@ -167,6 +167,32 @@ def test_down_vs_idle_vs_low_traffic_errors():
         tools.run_prometheus_query, tools._docker_containers, tools._span_metrics_age_seconds = saved
 
 
+def test_a_rejected_tool_call_never_crashes_the_run():
+    # Found in the Day 2 sweep: Groq answered HTTP 400 "Tool call validation failed" and the run crashed.
+    import json
+    import types
+    import llm
+    calls = {"n": 0}
+    submit = {"status": "escalated", "root_cause_service": None, "fault_type": "unknown",
+              "root_cause_summary": "Not enough evidence to name a component.", "confidence": 0.3, "evidence": [],
+              "action": "escalate_to_human", "action_target": None, "action_reason": "not confident"}
+
+    def fake_chat(messages, tools=None, tool_choice="auto", temperature=0.0):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise llm.ToolCallRejected("Tool call validation failed: parameter action_parameters must be object")
+        call = types.SimpleNamespace(id="c1", function=types.SimpleNamespace(name="submit_diagnosis", arguments=json.dumps(submit)))
+        return types.SimpleNamespace(content="", tool_calls=[call])
+
+    saved = llm.chat
+    llm.chat = fake_chat
+    try:
+        diagnosis = agent.run_investigation("test alert", "t-400", review_enabled=False)
+    finally:
+        llm.chat = saved
+    assert calls["n"] == 2 and diagnosis["status"] == "escalated" and report.schema_errors(diagnosis) == []
+
+
 import tempfile  # noqa: E402
 
 import actions  # noqa: E402

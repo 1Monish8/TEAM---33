@@ -71,17 +71,17 @@ TOOL_DESCRIPTIONS = [
            "root_cause_service": {"type": ["string", "null"], "description": "The failing component (deepest failing span / broken container), not the symptom."},
            "fault_type": {"type": "string", "enum": report.SCHEMA["properties"]["root_cause"]["properties"]["fault_type"]["enum"]},
            "root_cause_summary": {"type": "string", "description": "2-4 sentences: what is broken, how you know, what the user sees."},
-           "symptom_services": {"type": "array", "items": {"type": "string"}},
+           "symptom_services": {"type": ["array", "null"], "items": {"type": "string"}},
            "confidence": {"type": "number", "description": "0..1 following the confidence rule."},
            "evidence": {"type": "array", "items": {"type": "object", "properties": {
                "ref": {"type": "string", "description": "e.g. trace-4, log-9, metric-2"},
                "why_it_matters": {"type": "string"}}, "required": ["ref"]}},
            "action": {"type": "string", "enum": report.SCHEMA["properties"]["proposed_action"]["properties"]["action"]["enum"]},
            "action_target": {"type": ["string", "null"]},
-           "action_parameters": {"type": "object", "description": "Optional, e.g. {\"user_count\": 1} for throttle_load. "
+           "action_parameters": {"type": ["object", "null"], "description": "Optional, e.g. {\"user_count\": 1} for throttle_load. "
                                  "Never a flag name: you do not know flag names."},
            "action_reason": {"type": "string"},
-           "prevention": {"type": "string", "description": "One change that would stop this recurring."}},
+           "prevention": {"type": ["string", "null"], "description": "One change that would stop this recurring."}},
           ["status", "root_cause_service", "fault_type", "root_cause_summary", "confidence", "evidence",
            "action", "action_target", "action_reason"]),
 ]
@@ -280,8 +280,21 @@ def run_investigation(alert_text, incident_id=None, maximum_iterations=None, tra
             record({"event": "kill_switch"})
             break
         last_turn = iteration == (maximum_iterations or config.MAX_AGENT_ITERATIONS) - 1
-        reply = llm.chat(compact_history(messages), tools=TOOL_DESCRIPTIONS,
-                         tool_choice={"type": "function", "function": {"name": "submit_diagnosis"}} if last_turn else "auto")
+        try:
+            reply = llm.chat(compact_history(messages), tools=TOOL_DESCRIPTIONS,
+                             tool_choice={"type": "function", "function": {"name": "submit_diagnosis"}} if last_turn else "auto")
+        except llm.ToolCallRejected as error:
+            # Groq refused a malformed tool call before it ran (HTTP 400). A bad call must never crash the run:
+            # tell the model exactly what was wrong and let it try again; it counts like a rejected submission.
+            rejections += 1
+            _log("  tool call rejected by the API:", str(error)[:200])
+            record({"event": "tool_call_rejected", "iteration": iteration, "error": str(error)[:1000]})
+            messages.append({"role": "user", "content": "Your last tool call was rejected by the API before it ran: "
+                             + str(error)[:600] + " Call the tool again with arguments that exactly match its schema "
+                             "(use null or leave out optional fields you do not need)."})
+            if rejections >= 3:
+                break
+            continue
         run.setdefault("models", set()).add(llm.last_model_used)
         messages.append(llm.assistant_message_to_dict(reply))
         record({"event": "llm_reply", "iteration": iteration, "model": llm.last_model_used, "usage": llm.last_usage,

@@ -33,6 +33,11 @@ _recent_completions = []                     # completion sizes actually observe
 last_usage = None                            # {"prompt_tokens", "completion_tokens", "total_tokens"} of the last call
 
 
+class ToolCallRejected(Exception):
+    """The provider refused the model's tool call because it did not match the tool's schema (Groq: HTTP 400
+    'Tool call validation failed'). The agent loop turns this into feedback for the model instead of crashing."""
+
+
 def get_client():
     global _client
     if _client is None:
@@ -121,6 +126,11 @@ def chat(messages, tools=None, tool_choice="auto", temperature=0.0):
                           "completion_tokens": getattr(usage, "completion_tokens", None), "total_tokens": used}
             last_model_used = getattr(response, "model", None) or request["model"]
             return response.choices[0].message
+        except openai.BadRequestError as error:
+            text = str(error)
+            if "tool call validation failed" in text.lower() or "failed_generation" in text:
+                raise ToolCallRejected(text[:1500]) from error
+            raise
         except TRANSIENT_ERRORS as error:
             if isinstance(error, openai.RateLimitError):
                 _recent_usage.append((time.time(), TOKEN_BUDGET))  # treat the minute as full
