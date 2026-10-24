@@ -79,7 +79,7 @@ About 60 of the 100 points depend on Day 1 work: Checkpoints 1, 2 and 4, plus mo
 
 ## 4. Architecture
 
-![architecture](architecture.png)
+![architecture](architecture-day1.png)
 
 Full flow, including the investigation policy: `docs/flow.png`.
 
