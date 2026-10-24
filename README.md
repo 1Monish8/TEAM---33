@@ -90,7 +90,7 @@ A local web UI over the **real** project. It re-implements nothing: it runs `age
 | **Live overview** | Every service ranked by deviation from its own baseline; containers, Kafka, database and cache problems; the pre-flight check |
 | **Break it** | Inject any of the known practice faults, or a **secret** fault (mentor mode: random flag or docker fault on a random service). The page counts down the 2 minutes Prometheus needs, then you reveal and score the result, and reset. |
 | **Investigate & fix** | Runs the agent live: every tool call and its evidence refs, pacing, rejected tool calls, the hallucination guard firing, the diagnosis with *how the code set its confidence*, the reviewer, then the **dry run and Approve / Reject**, the action and the verification |
-| **Evaluation** | Blind-test scoreboard, the three-ideas proof (18 checks) and the 33 tests, run from the page; the calibration table; the fault-detection matrix; the full action log |
+| **Evaluation** | Blind-test scoreboard, the three-ideas proof (18 checks) and the 34 tests, run from the page; the calibration table; the fault-detection matrix; the full action log |
 | **History & logs** | Every diagnosis ever written (UI, demos, mentor rounds, sweeps), each opening its report |
 
 **Approve / Reject is typed into `agent.py`'s own `y/N` prompt**, so the UI passes through exactly the same four gates as the terminal. The approver is logged as `<user> (control room)`. The KILL_SWITCH button in the header creates or removes the same `KILL_SWITCH` file. A blind test scores the **first** answer after the injection.

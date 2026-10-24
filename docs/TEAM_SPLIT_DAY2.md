@@ -7,7 +7,7 @@
 | 1 | **Tarun (Loop)** | Act-and-verify loop wired into the agent, reviewer, trust checks, LLM key/model routing, control-room UI | `agent.py` `llm.py` `prompts/` `ui_server.py` `ui/` `run_ui.sh` `README.md` `team-form.md` `.gitignore` |
 | 2 | **Monish (Host)** | Stack config, pre-flight, one-command runners, fault injection (23 incidents), mentor blind test, detection matrix | `config.py` `check_stack.py` `demo.sh` `run_day1.sh` `run_everything.sh` `practice/` |
 | 3 | **Devaki (Tools)** | Baselines and deviation ranking, SLOW_TAIL, dependency health, error signatures, recovery verification | `tools.py` `verify.py` `llm_test.py` |
-| 4 | **Member 4 (Output)** | Action allowlist and safety gates, schema, report, 33 offline tests, three-ideas proof, action log | `actions.py` `schema.json` `report.py` `tests/` `prove_three_ideas.py` `action_log.jsonl` |
+| 4 | **Member 4 (Output)** | Action allowlist and safety gates, schema, report, 34 offline tests, three-ideas proof, action log | `actions.py` `schema.json` `report.py` `tests/` `prove_three_ideas.py` `action_log.jsonl` |
 | 5 | **Member 5 (Evidence)** | Sweeps, calibration, evaluation note, all docs and diagrams, every report | `run_all.py` `calibration.py` `evaluation-note.md` `docs/` `reports/` |
 
 ## 0. Tarun first: make the zip (excludes keys, `.venv`, `.git`, caches and fault state)
@@ -80,7 +80,7 @@ ZIP="PATH_TO_UNZIPPED_FOLDER"
 cp "$ZIP/actions.py" "$ZIP/schema.json" "$ZIP/report.py" "$ZIP/prove_three_ideas.py" "$ZIP/action_log.jsonl" .
 cp -R "$ZIP/tests" .
 git add actions.py schema.json report.py prove_three_ideas.py action_log.jsonl tests/
-git commit -m "Action allowlist and safety gates (approval, kill switch, protected containers), extended schema and report, 33 offline tests, three-ideas proof"
+git commit -m "Action allowlist and safety gates (approval, kill switch, protected containers), extended schema and report, 34 offline tests, three-ideas proof"
 git pull --rebase origin main
 git push origin main
 ```

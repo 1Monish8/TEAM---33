@@ -324,6 +324,26 @@ def test_a_rejected_key_is_dropped_for_good():
         llm._capped_until.update(capped_until)
 
 
+def test_citations_as_strings_or_objects_are_both_accepted_and_still_checked():
+    # Found in the control room: with two faults active the model wrote additional_findings refs as objects, Groq
+    # rejected the whole answer against our schema (HTTP 400) and a turn was lost.
+    import llm
+    metric, trace, log = _seed_registry()
+    tools.register_evidence_item("metric", {"service": "frontend-proxy", "metric": "requests_per_second", "value": 40,
+                                            "promql": "x", "timestamp": "2026-10-23T00:00:00Z"})
+    arguments = dict(_args([]), evidence=[metric, {"ref": trace}, {"reference": log}],
+                     additional_findings=[{"service": "frontend-proxy", "finding": "traffic surge",
+                                           "refs": [{"ref": "metric-4"}, "metric-4"]}])
+    diagnosis, problem = agent.build_diagnosis(arguments, _run())
+    assert problem is None, problem
+    assert [e["reference"] for e in diagnosis["evidence"]] == [metric, trace, log]
+    assert diagnosis["additional_findings"][0]["service"] == "frontend-proxy"
+    invented = dict(arguments, evidence=[{"ref": "trace-9999"}])
+    assert agent.build_diagnosis(invented, _run())[0] is None           # the guard still checks every shape
+    submit = [t for t in agent.TOOL_DESCRIPTIONS if t["function"]["name"] == "submit_diagnosis"][0]["function"]["parameters"]
+    assert "string" in submit["properties"]["additional_findings"]["items"]["properties"]["refs"]["items"]["type"]
+
+
 def test_daily_cap_walks_backup_key_before_smaller_model():
     import openai
     import types

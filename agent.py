@@ -76,9 +76,12 @@ TOOL_DESCRIPTIONS = [
            "root_cause_summary": {"type": "string", "description": "2-4 sentences: what is broken, how you know, what the user sees."},
            "symptom_services": {"type": ["array", "null"], "items": {"type": "string"}},
            "confidence": {"type": "number", "description": "0..1 following the confidence rule."},
-           "evidence": {"type": "array", "items": {"type": "object", "properties": {
+           # string OR object: Groq validates tool calls against this schema before we see them, and rejecting an
+           # answer over its shape (not its content) wastes a turn; agent code normalises both, and the evidence
+           # guard still checks every ref
+           "evidence": {"type": "array", "items": {"type": ["object", "string"], "properties": {
                "ref": {"type": "string", "description": "e.g. trace-4, log-9, metric-2"},
-               "why_it_matters": {"type": "string"}}, "required": ["ref"]}},
+               "why_it_matters": {"type": "string"}}}},
            "action": {"type": "string", "enum": report.SCHEMA["properties"]["proposed_action"]["properties"]["action"]["enum"]},
            "action_target": {"type": ["string", "null"]},
            "action_parameters": {"type": ["object", "null"], "description": "Optional, e.g. {\"user_count\": 1} for throttle_load. "
@@ -88,7 +91,9 @@ TOOL_DESCRIPTIONS = [
            "additional_findings": {"type": ["array", "null"], "description": "Only if the evidence shows a SECOND independent "
                                    "problem: [{\"service\": ..., \"finding\": ..., \"refs\": [...]}]. Leave out otherwise.",
                                    "items": {"type": "object", "properties": {"service": {"type": "string"},
-                                             "finding": {"type": "string"}, "refs": {"type": "array", "items": {"type": "string"}}}}}},
+                                             "finding": {"type": "string"},
+                                             "refs": {"type": "array", "description": "ref strings, e.g. [\"trace-4\"]",
+                                                      "items": {"type": ["string", "object"]}}}}}},
           ["status", "root_cause_service", "fault_type", "root_cause_summary", "confidence", "evidence",
            "action", "action_target", "action_reason"]),
 ]
@@ -130,13 +135,20 @@ def _known_arguments(function, arguments):
     return {key: value for key, value in (arguments or {}).items() if key in accepted}
 
 
+def _ref_of(item):
+    # the model writes a citation as "trace-4" or as {"ref": "trace-4", ...}: both mean the same reference
+    if isinstance(item, dict):
+        return str(item.get("ref") or item.get("reference") or "")
+    return str(item or "")
+
+
 def _additional_findings(raw):
     """P2 multiple simultaneous faults: secondary problems, each backed by real refs (same registry check)."""
     findings = []
     for item in raw or []:
         if not isinstance(item, dict) or not item.get("service"):
             continue
-        refs = [str(ref) for ref in item.get("refs") or []]
+        refs = [_ref_of(ref) for ref in item.get("refs") or [] if _ref_of(ref)]
         invented = tools.check_cited_evidence(refs)
         if invented:
             return ("additional_findings cites references no tool returned in this run: " + ", ".join(invented)
@@ -153,7 +165,9 @@ def _label_for(confidence):
 def build_diagnosis(arguments, run):
     """Turn submit_diagnosis arguments into a schema-valid diagnosis, or explain why not.
     Evidence checking and confidence calibration happen HERE, in code, not in the prompt."""
-    cited = [item.get("ref", "") for item in arguments.get("evidence") or []]
+    arguments = dict(arguments, evidence=[item if isinstance(item, dict) else {"ref": _ref_of(item)}
+                                          for item in arguments.get("evidence") or []])
+    cited = [_ref_of(item) for item in arguments["evidence"] if _ref_of(item)]
     if os.environ.get("DEMO_HALLUCINATION") == "1" and not run.get("hallucination_planted"):
         # DEMO ONLY (documented in the README): poison our own submission once, so the audience watches the
         # evidence guard reject an invented reference and the model resubmit with real ones.
@@ -169,7 +183,9 @@ def build_diagnosis(arguments, run):
     root_service = arguments.get("root_cause_service") or None
     evidence = []
     for item in arguments.get("evidence") or []:
-        record = dict(tools.evidence_registry[item["ref"]])
+        if not _ref_of(item):
+            continue
+        record = dict(tools.evidence_registry[_ref_of(item)])
         if item.get("why_it_matters"):
             record["why_it_matters"] = str(item["why_it_matters"])[:300]
         evidence.append(record)
