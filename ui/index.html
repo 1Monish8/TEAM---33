@@ -239,7 +239,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:#070c1a;border:1px sol
     <p class="sub">How well does it work, and can we prove the promises? Blind-test score, the three ideas, tests, calibration, fault detection and every action ever taken.</p>
     <div class="grid g2">
       <div class="card"><div class="head"><h2>🎲 Blind-test scoreboard</h2><span class="chip purple">mentor mode</span></div><div id="scoreBody"></div></div>
-      <div class="card"><div class="head"><h2>🛡 The three ideas, proven</h2><div class="right"><button class="btn sm primary" onclick="runTask('proof','proofOut')">Run proof</button><button class="btn sm" onclick="runTask('tests','testsOut')">Run 29 tests</button></div></div>
+      <div class="card"><div class="head"><h2>🛡 The three ideas, proven</h2><div class="right"><button class="btn sm primary" onclick="runTask('proof','proofOut')">Run proof</button><button class="btn sm" onclick="runTask('tests','testsOut')">Run 31 tests</button></div></div>
         <div id="proofOut" class="empty">18 PASS/FAIL checks on the real code: evidence guard, calibration, reviewer, approval, allowlist, kill switch, rollback. No LLM, nothing in the shop changes.</div>
         <div id="testsOut" style="margin-top:10px"></div></div>
       <div class="card"><div class="head"><h2>📏 Calibration: stated confidence vs reality</h2><span class="chip gray">practice sweeps</span></div><div id="calBody"></div></div>
@@ -465,6 +465,9 @@ function handle(e){
     if (/^pacing:/.test(l)) addEv(`⏳ <span class="muted">${esc(l)}</span> <span class="dim small">(staying under 8,000 tokens/min)</span>`, 'note');
     else if (/DAILY-CAPPED|cool-down over/.test(l)) addEv(`🔀 <b>${esc(l)}</b>`, 'note');
     else if (/LLM call failed/.test(l)) addEv(`↻ <span class="muted">${esc(l)}</span>`, 'note');
+    else if (/request too large/.test(l)) addEv(`🗜 <b>${esc(l)}</b> <span class="dim small">(one request may not exceed the whole 8,000 tokens/min allowance)</span>`, 'note');
+    else if (/repeated: reminded/.test(l)) addEv(`↺ <span class="muted">${esc(l)}</span>`, 'note');
+    else if (/the LLM call failed/.test(l)) addEv(`✘ <b style="color:var(--red)">${esc(l)}</b> <span class="dim small">→ honest escalation, no crash</span>`, 'bad');
     else if (/^\[demo\] planted/.test(l)) addEv(`🧪 <b style="color:var(--red)">Hallucination demo:</b> a fake reference <span class="ref">trace-9999</span> was planted in the model's answer. Watch the guard.`, 'bad');
     else if (/KILL_SWITCH present/.test(l)) addEv(`⏻ <b style="color:var(--red)">${esc(l)}</b>`, 'bad');
     if (/^--- DIAGNOSIS ---/.test(l)) setStep('Dry run');

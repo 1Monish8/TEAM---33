@@ -199,6 +199,72 @@ def test_a_rejected_tool_call_never_crashes_the_run():
     assert calls["n"] == 2 and diagnosis["status"] == "escalated" and report.schema_errors(diagnosis) == []
 
 
+def test_request_too_large_compacts_harder_and_other_llm_errors_escalate():
+    # Found in the control room: a 10-call run sent 8,082 tokens against an 8,000 per-minute limit (HTTP 413) and crashed.
+    import json
+    import types
+    import llm
+    big = json.dumps({"rows": "x" * 9000, "ref": "metric-1"}, separators=(",", ":"))  # as agent.py writes results
+    history = [{"role": "system", "content": "s"}, {"role": "user", "content": "u"}] + \
+              [{"role": "tool", "tool_call_id": str(i), "content": big} for i in range(3)]
+    sizes = [len(json.dumps(agent.compact_history(history, level))) for level in range(3)]
+    assert sizes[0] > sizes[1] > sizes[2] and "metric-1" in json.dumps(agent.compact_history(history, 2))
+    escalate = {"status": "escalated", "root_cause_service": None, "fault_type": "unknown", "root_cause_summary": "Not enough evidence to name a component.",
+                "confidence": 0.3, "evidence": [], "action": "escalate_to_human", "action_target": None, "action_reason": "not confident"}
+    calls = {"n": 0}
+
+    def too_large_once(messages, tools=None, tool_choice="auto", temperature=0.0):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise llm.RequestTooLarge("Error code: 413 Request too large ... Limit 8000, Requested 8082")
+        call = types.SimpleNamespace(id="c1", function=types.SimpleNamespace(name="submit_diagnosis", arguments=json.dumps(escalate)))
+        return types.SimpleNamespace(content="", tool_calls=[call])
+
+    def broken(messages, tools=None, tool_choice="auto", temperature=0.0):
+        raise RuntimeError("provider exploded")
+
+    saved = llm.chat
+    try:
+        llm.chat = too_large_once
+        diagnosis = agent.run_investigation("test alert", "t-413", review_enabled=False)
+        assert calls["n"] == 2 and diagnosis["status"] == "escalated"           # retried smaller, then answered
+        llm.chat = broken
+        diagnosis = agent.run_investigation("test alert", "t-500", review_enabled=False)   # must not raise
+        assert diagnosis["status"] == "escalated" and "LLM call failed" in diagnosis["root_cause"]["summary"]
+        assert report.schema_errors(diagnosis) == []
+    finally:
+        llm.chat = saved
+
+
+def test_a_repeated_tool_call_is_not_run_twice():
+    import json
+    import types
+    import llm
+    ran = {"n": 0}
+    script = [("get_container_health", {"window_minutes": 5}), ("get_container_health", {"window_minutes": 5}),
+              ("submit_diagnosis", {"status": "escalated", "root_cause_service": None, "fault_type": "unknown",
+                                    "root_cause_summary": "Not enough evidence to name a component.", "confidence": 0.3, "evidence": [],
+                                    "action": "escalate_to_human", "action_target": None, "action_reason": "not confident"})]
+    replies = iter(script)
+
+    def scripted(messages, tools=None, tool_choice="auto", temperature=0.0):
+        name, arguments = next(replies)
+        call = types.SimpleNamespace(id=name, function=types.SimpleNamespace(name=name, arguments=json.dumps(arguments)))
+        return types.SimpleNamespace(content="", tool_calls=[call])
+
+    def counting(window_minutes=15):
+        ran["n"] += 1
+        return {"containers_with_problems": []}
+
+    saved = llm.chat, agent.AVAILABLE_TOOLS["get_container_health"]
+    llm.chat, agent.AVAILABLE_TOOLS["get_container_health"] = scripted, counting
+    try:
+        agent.run_investigation("test alert", "t-repeat", review_enabled=False)
+    finally:
+        llm.chat, agent.AVAILABLE_TOOLS["get_container_health"] = saved
+    assert ran["n"] == 1   # the second identical call got a reminder, not a second run
+
+
 def test_daily_cap_walks_backup_key_before_smaller_model():
     import openai
     import types

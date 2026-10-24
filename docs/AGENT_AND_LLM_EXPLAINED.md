@@ -201,6 +201,16 @@ The SDK returns an object, but the next request needs a plain dict in the histor
 
 ---
 
+### 5.5 A request bigger than the whole per-minute limit (HTTP 413)
+- **What happened:** pacing waits for room in the minute, but one request can be larger than the *entire* 8,000-token allowance. A 10-call run once sent 8,082 tokens, got `413 Request too large`, and crashed.
+- **Now:**
+  - Before every call, `agent._fitting_history()` picks the gentlest of 3 compaction levels whose request fits. Old results are cut harder at each level, and their evidence refs are always kept.
+  - If Groq still answers 413, `llm.py` raises `RequestTooLarge`. The loop moves to a harder level and retries.
+  - Any other LLM failure ends in an honest escalation (`fallback_escalation`), never a crash.
+- **Repeated calls:** an identical tool call (same tool, same arguments) gets a short reminder, "already called at step N, use that result", instead of a second large result.
+
+---
+
 ## Part 6: Questions you may get, with short answers
 
 **Why no framework (LangChain etc.)?**
@@ -225,6 +235,9 @@ Every cap is written into `calibration_notes`.
 
 **What if the model never finishes?**
 On the 14th turn it's forced to call `submit_diagnosis`. After 3 rejected submissions, or a kill switch, `fallback_escalation` returns a valid, honest escalation. There's always valid JSON.
+
+**What if a request is too big for the rate limit?**
+It can't crash any more. Every request is compacted to fit under 8,000 tokens; on a 413 the agent compacts harder and retries; any other LLM error ends in a valid escalation. An identical repeated tool call gets a reminder instead of a second result.
 
 **What if a tool or Groq fails?**
 - A failing tool returns `{"error": …}` to the model, and the run continues.

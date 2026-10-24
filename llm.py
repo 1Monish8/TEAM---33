@@ -38,6 +38,11 @@ class ToolCallRejected(Exception):
     'Tool call validation failed'). The agent loop turns this into feedback for the model instead of crashing."""
 
 
+class RequestTooLarge(Exception):
+    """One request is bigger than the whole per-minute allowance (Groq: HTTP 413 'Request too large ... Limit 8000,
+    Requested 8082'). Waiting cannot fix it; only a smaller request can, so the agent loop compacts harder."""
+
+
 def get_client():
     global _client
     if _client is None:
@@ -172,6 +177,11 @@ def chat(messages, tools=None, tool_choice="auto", temperature=0.0):
             print("  LLM call failed (%s: %s), retry %d in %.0fs"
                   % (type(error).__name__, str(error)[:160], attempt, wait_seconds), file=sys.stderr, flush=True)
             time.sleep(wait_seconds)
+        except openai.APIStatusError as error:
+            # after the transient clause on purpose: 429 and 5xx are APIStatusErrors too
+            if error.status_code == 413 or "request too large" in str(error).lower():
+                raise RequestTooLarge(str(error)[:600]) from error
+            raise
 
 
 def assistant_message_to_dict(message):

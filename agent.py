@@ -284,24 +284,39 @@ def fallback_escalation(run, reason):
 
 FULL_RECENT_TOOL_RESULTS = 2
 COMPACT_CHARS = 600
+# (tool results kept in full, characters kept of older results, characters kept of the recent ones) per level
+COMPACT_LEVELS = [(2, 600, None), (1, 250, 4000), (0, 120, 2000)]
 
 
-def compact_history(messages):
+def compact_history(messages, level=0):
     """What the model is sent each step. The last two tool results go in full; older ones are cut to their first
     ~600 characters plus EVERY evidence ref they contained, so citations keep working. Our Groq key allows 8,000
     tokens per minute and every step resends the whole history, so this roughly halves the cost of a step and the
-    time an investigation spends waiting for the rate limit. The transcript always keeps the full results."""
+    time an investigation spends waiting for the rate limit. The transcript always keeps the full results.
+    Higher levels cut harder: one request may never exceed the whole per-minute allowance (a 10-call run once
+    asked for 8,082 tokens against a limit of 8,000, got HTTP 413 and crashed)."""
+    keep_full, older_chars, recent_chars = COMPACT_LEVELS[min(level, len(COMPACT_LEVELS) - 1)]
     tool_positions = [index for index, message in enumerate(messages) if message.get("role") == "tool"]
-    older = set(tool_positions[:-FULL_RECENT_TOOL_RESULTS])
+    recent = set(tool_positions[len(tool_positions) - keep_full:]) if keep_full else set()
     compacted = []
     for index, message in enumerate(messages):
-        if index in older and len(message["content"]) > COMPACT_CHARS:
+        limit = None if index not in tool_positions else (recent_chars if index in recent else older_chars)
+        if limit and len(message["content"]) > limit:
             refs = sorted(set(re.findall(r'"(?:ref|reference)":"((?:trace|log|metric)-\d+)"', message["content"])),
                           key=lambda ref: int(ref.split("-")[1]))
-            message = dict(message, content=message["content"][:COMPACT_CHARS]
-                           + ' ...[older result shortened to save tokens; its evidence refs are still valid: %s]' % (", ".join(refs) or "none"))
+            message = dict(message, content=message["content"][:limit]
+                           + ' ...[result shortened to save tokens; its evidence refs are still valid: %s]' % (", ".join(refs) or "none"))
         compacted.append(message)
     return compacted
+
+
+def _fitting_history(messages, minimum_level=0):
+    # the gentlest compaction whose request fits the per-minute allowance (the hardest one if none does)
+    for level in range(minimum_level, len(COMPACT_LEVELS)):
+        compacted = compact_history(messages, level)
+        if llm._estimate_tokens({"messages": compacted, "tools": TOOL_DESCRIPTIONS}) <= llm.TOKEN_BUDGET:
+            return compacted, level
+    return compacted, len(COMPACT_LEVELS) - 1
 
 
 def run_investigation(alert_text, incident_id=None, maximum_iterations=None, transcript_path=None, review_enabled=True):
@@ -323,15 +338,28 @@ def run_investigation(alert_text, incident_id=None, maximum_iterations=None, tra
     record({"event": "alert", "incident_id": run["incident_id"], "alert": alert_text, "time": run["started_iso"]})
     diagnosis = None
     rejections = 0
+    minimum_level = 0      # raised after an HTTP 413: from then on every request is cut harder
+    llm_failure = None     # an LLM error we could not recover from: escalate honestly instead of crashing
+    seen_calls = {}        # (tool, arguments) -> step it was first called at
     for iteration in range(maximum_iterations or config.MAX_AGENT_ITERATIONS):
         if KILL_SWITCH_FILE.exists():
             _log("KILL_SWITCH present: stopping the investigation")
             record({"event": "kill_switch"})
             break
         last_turn = iteration == (maximum_iterations or config.MAX_AGENT_ITERATIONS) - 1
+        history, level = _fitting_history(messages, minimum_level)
         try:
-            reply = llm.chat(compact_history(messages), tools=TOOL_DESCRIPTIONS,
+            reply = llm.chat(history, tools=TOOL_DESCRIPTIONS,
                              tool_choice={"type": "function", "function": {"name": "submit_diagnosis"}} if last_turn else "auto")
+        except llm.RequestTooLarge as error:
+            record({"event": "request_too_large", "iteration": iteration, "level": level, "error": str(error)[:400]})
+            if level >= len(COMPACT_LEVELS) - 1:
+                llm_failure = "every request was larger than the provider's per-minute token limit, even fully compacted."
+                break
+            minimum_level = level + 1
+            _log("  request too large for the per-minute limit: compacting the history harder (level %d) and retrying"
+                 % minimum_level)
+            continue
         except llm.ToolCallRejected as error:
             # Groq refused a malformed tool call before it ran (HTTP 400). A bad call must never crash the run:
             # tell the model exactly what was wrong and let it try again; it counts like a rejected submission.
@@ -346,6 +374,11 @@ def run_investigation(alert_text, incident_id=None, maximum_iterations=None, tra
             if rejections >= 3:
                 break
             continue
+        except Exception as error:  # any other LLM failure: never crash, end in an honest escalation
+            llm_failure = "the LLM call failed (%s: %s)." % (type(error).__name__, str(error)[:200])
+            _log("  " + llm_failure)
+            record({"event": "llm_error", "iteration": iteration, "error": str(error)[:1000]})
+            break
         run.setdefault("models", set()).add(llm.last_model_used)
         messages.append(llm.assistant_message_to_dict(reply))
         record({"event": "llm_reply", "iteration": iteration, "model": llm.last_model_used, "usage": llm.last_usage,
@@ -367,7 +400,17 @@ def run_investigation(alert_text, incident_id=None, maximum_iterations=None, tra
                     result["reason"] = problem
                     _log("  submit_diagnosis rejected:", problem)
                 record({"event": "submit", "iteration": iteration, "arguments": arguments, "result": result})
+            elif (name, json.dumps(arguments, sort_keys=True)) in seen_calls:
+                # the same call again (one run asked get_container_health three times in a row): a short reminder
+                # instead of the same large result, so the history stays small and the model moves on
+                first = seen_calls[(name, json.dumps(arguments, sort_keys=True))]
+                result = {"note": "You already called %s with these arguments at step %d. Its result is above and its "
+                                  "evidence refs are still valid. Do not repeat it: call a different tool or "
+                                  "submit_diagnosis." % (name, first)}
+                _log("  [%d] %s repeated: reminded the model instead of running it again" % (iteration, name))
+                record({"event": "tool", "iteration": iteration, "tool": name, "arguments": arguments, "result": result})
             else:
+                seen_calls[(name, json.dumps(arguments, sort_keys=True))] = iteration
                 started = time.time()
                 try:
                     result = AVAILABLE_TOOLS[name](**_known_arguments(AVAILABLE_TOOLS[name], arguments))
@@ -383,7 +426,7 @@ def run_investigation(alert_text, incident_id=None, maximum_iterations=None, tra
 
     if diagnosis is None:
         reason = ("the investigation was stopped by the KILL_SWITCH." if KILL_SWITCH_FILE.exists()
-                  else "no accepted diagnosis within the iteration/rejection budget.")
+                  else llm_failure or "no accepted diagnosis within the iteration/rejection budget.")
         diagnosis = fallback_escalation(run, reason)
     elif review_enabled and diagnosis["status"] == "diagnosed":
         apply_review(diagnosis)
