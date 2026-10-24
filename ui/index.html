@@ -239,7 +239,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:#070c1a;border:1px sol
     <p class="sub">How well does it work, and can we prove the promises? Blind-test score, the three ideas, tests, calibration, fault detection and every action ever taken.</p>
     <div class="grid g2">
       <div class="card"><div class="head"><h2>🎲 Blind-test scoreboard</h2><span class="chip purple">mentor mode</span></div><div id="scoreBody"></div></div>
-      <div class="card"><div class="head"><h2>🛡 The three ideas, proven</h2><div class="right"><button class="btn sm primary" onclick="runTask('proof','proofOut')">Run proof</button><button class="btn sm" onclick="runTask('tests','testsOut')">Run 31 tests</button></div></div>
+      <div class="card"><div class="head"><h2>🛡 The three ideas, proven</h2><div class="right"><button class="btn sm primary" onclick="runTask('proof','proofOut')">Run proof</button><button class="btn sm" onclick="runTask('tests','testsOut')">Run 33 tests</button></div></div>
         <div id="proofOut" class="empty">18 PASS/FAIL checks on the real code: evidence guard, calibration, reviewer, approval, allowlist, kill switch, rollback. No LLM, nothing in the shop changes.</div>
         <div id="testsOut" style="margin-top:10px"></div></div>
       <div class="card"><div class="head"><h2>📏 Calibration: stated confidence vs reality</h2><span class="chip gray">practice sweeps</span></div><div id="calBody"></div></div>
@@ -474,7 +474,7 @@ function handle(e){
     if (R.collect === 'dry' && /^(action|reason|would|undo)\s*:/.test(l)) R.dry.push(l);
     if (/^--- PROPOSED ACTION/.test(l)) { R.collect = 'dry'; R.dry = []; }
     if (/^acting\s*:/.test(l)) { setStep('Act'); verifyLine('▶ ' + l, 'blue'); }
-    if (/waiting \d+s for fresh metrics|verification check/.test(l)) { setStep('Verify'); verifyLine(l, 'muted'); }
+    if (/waiting \d+s for fresh metrics|verification check/.test(l)) { setStep('Verify'); verifyLine(l, /does it hold/.test(l) ? 'blue' : 'muted'); }
     if (/^rolling back/.test(l)) verifyLine('↩ ' + l, 'amber');
     if (/^OUTCOME:/.test(l)) outcome(l.replace(/^OUTCOME:\s*/, ''));
   }
@@ -500,7 +500,7 @@ function step(e){
   } else if (e.step === 'tool_call_rejected'){
     addEv(`<b style="color:var(--red)">✘ The API rejected a malformed tool call</b> <div class="small">${esc((e.error||'').slice(0,220))}</div><div class="small dim">→ fed back to the model with the list of real tools; the run continues</div>`, 'bad');
   } else if (e.step === 'review'){
-    const rv = e.review || {}; addEv(`⚖ <b>Reviewer</b> (a 2nd model call trying to disprove it): <span class="chip ${rv.disputed?'amber':'green'}">${rv.disputed?'DISPUTED':'CONFIRMED'}</span>${rv.disputed?` <span class="chip ${rv.grounded?'red':'gray'}">${rv.grounded?'grounded → confidence capped at 0.60':'speculative → recorded only'}</span>`:''}<div class="small muted" style="margin-top:4px">${esc(rv.verdict||'')}</div>`, rv.disputed ? 'note' : 'ok');
+    const rv = e.review || {}; const rvLabel = rv.ran === false ? 'DID NOT RUN' : rv.disputed ? 'DISPUTED' : 'CONFIRMED'; addEv(`⚖ <b>Reviewer</b> (a 2nd model call trying to disprove it): <span class="chip ${rv.ran === false ? 'gray' : rv.disputed?'amber':'green'}">${rvLabel}</span>${rv.disputed?` <span class="chip ${rv.grounded?'red':'gray'}">${rv.grounded?'grounded → confidence capped at 0.60':'speculative → recorded only'}</span>`:''}<div class="small muted" style="margin-top:4px">${esc(rv.verdict||'')}</div>`, rv.disputed ? 'note' : 'ok');
   } else if (e.step === 'diagnosis'){
     R.diagnosis = e.diagnosis; renderDiagnosis(e.diagnosis);
     if (mode === 'no_act' || e.diagnosis.status !== 'diagnosed') setStep('Done');
@@ -530,7 +530,7 @@ function renderDiagnosis(d, target){
     </div>
     <p style="margin:12px 0">${esc(d.root_cause.summary)}</p>
     ${notes.length ? `<div class="banner amber" style="flex-direction:column;align-items:flex-start;gap:4px;margin:0 0 10px"><b class="small">HOW THE CODE SET THIS CONFIDENCE</b>${notes.map(n=>`<div class="small">• ${esc(n)}</div>`).join('')}</div>` : `<div class="small muted" style="margin-bottom:10px">✓ the trust checks kept the model's confidence: enough independent evidence</div>`}
-    ${rv ? `<div class="banner ${rv.disputed ? (rv.grounded ? 'red':'amber') : 'green'}" style="flex-direction:column;align-items:flex-start;gap:4px;margin:0 0 10px"><b class="small">REVIEWER (tries to disprove it): ${rv.disputed?'DISPUTED':'CONFIRMED'}${rv.disputed?(rv.grounded?' · grounded, applied':' · speculative, not applied'):''}</b><div class="small">${esc(rv.verdict)}</div></div>` : ''}
+    ${rv ? `<div class="banner ${rv.ran === false ? 'blue' : rv.disputed ? (rv.grounded ? 'red':'amber') : 'green'}" style="flex-direction:column;align-items:flex-start;gap:4px;margin:0 0 10px"><b class="small">REVIEWER (tries to disprove it): ${rv.ran === false ? 'DID NOT RUN (no second opinion)' : rv.disputed?'DISPUTED':'CONFIRMED'}${rv.disputed?(rv.grounded?' · grounded, applied':' · speculative, not applied'):''}</b><div class="small">${esc(rv.verdict)}</div></div>` : ''}
     <div class="muted small" style="font-weight:700;margin:6px 0">EVIDENCE (every ref was returned by a tool)</div>
     ${(d.evidence||[]).map(ev => `<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid #ffffff08"><span class="ref" style="flex:none">${esc(ev.reference)}</span><span class="chip ${ev.kind==='metric'?'teal':ev.kind==='trace'?'purple':'orange'}" style="flex:none">${esc(ev.kind)}</span><b class="mono small" style="flex:none">${esc(ev.service||'')}</b><span class="small">${evidenceLine(ev)}${ev.why_it_matters?`<div class="dim small">${esc(ev.why_it_matters)}</div>`:''}</span></div>`).join('') || '<div class="empty">none</div>'}
     ${(d.additional_findings||[]).length ? `<div class="banner blue" style="margin-top:10px">➕ Second independent problem: ${d.additional_findings.map(f=>`<b class="mono">${esc(f.service)}</b>: ${esc(f.finding)}`).join('; ')}</div>` : ''}
@@ -559,7 +559,7 @@ async function answer(text){ await api('/api/agent/answer', {job: R.job, text});
 function verifyLine(text, cls){ $('#verifyCard').classList.remove('hidden'); $('#verifyBody').innerHTML += `<div class="small ${cls === 'muted' ? 'muted' : ''}" style="padding:4px 0;${cls==='blue'?'color:var(--blue);font-weight:700':cls==='amber'?'color:var(--amber);font-weight:700':''}">${esc(text)}</div>`; }
 function outcome(text){
   if (R.outcomeShown) return; R.outcomeShown = true;
-  const good = /^recovered and verified/.test(text), bad = /rolled back|failed|not confirmed/.test(text), neutral = /dry run|rejected|escalated|halted/.test(text);
+  const good = /^recovered and verified/.test(text), bad = /rolled back|failed|not confirmed|relapsed/.test(text), neutral = /dry run|rejected|escalated|halted/.test(text);
   $('#verifyCard').classList.remove('hidden');
   $('#verifyBody').innerHTML += `<div class="banner ${good?'green':bad?'red':'amber'}" style="margin:10px 0 0"><div class="outcome">${good?'✅':bad?'↩':'ℹ'} ${esc(text)}</div></div>`;
   setStep('Done', bad);

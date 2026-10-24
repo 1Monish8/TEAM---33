@@ -148,7 +148,7 @@ This is the most important function to explain. **The model's answer is only a p
 | Kill switch again | `:555` | Re-checked **after** the human answered |
 | **Snapshot** | `:559–561` | `verify.snapshot()` captures the numbers to judge by; `capture_state()` saves what's needed to undo (e.g. the previous user count) |
 | **Act** | `:563` | `actions.execute(..., approved=True)`, the only place `approved=True` is ever passed |
-| **Verify** | `:568` | `verify.confirm_recovery()`: waits about 120 s and compares before and after (kill-switch aware) |
+| **Verify** | `:568` | `verify.confirm_recovery()`: waits about 120 s and compares before and after, then checks **again** 90 s later. Recovery counts only if it **holds**: a payment restart under its fault flag once looked healthy for about a minute, then failed again. Kill-switch aware. |
 | **Roll back** | `:573–580` | Not recovered → `inverse_of()` undoes it where possible, then escalates |
 
 Finally, `handle_incident` (`:622–634`) attaches the loop record and the action-log entries to the diagnosis and rewrites the JSON and report.

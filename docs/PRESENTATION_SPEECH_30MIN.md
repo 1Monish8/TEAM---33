@@ -265,7 +265,7 @@ Each fix was **back-tested** against two hours of real metrics before we trusted
 
 **Level two, the full agent.** `run_all.py` runs **sweeps**: inject, wait, run the agent, score its answer against the expected service, reset, and wait for a quiet baseline before the next one. `calibration.py` then builds the table you saw: stated confidence against actual accuracy.
 
-And we have **31 offline tests** that need no stack and no AI. They prove the safety logic every time:
+And we have **33 offline tests** that need no stack and no AI. They prove the safety logic every time:
 - invented evidence is rejected;
 - one evidence kind can't give high confidence;
 - the kill switch stops the loop;

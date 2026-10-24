@@ -349,7 +349,7 @@ proofs = [("faultctl.py", "23 practice incidents: application + infrastructure f
           ("mentor.py", "blind test: random secret fault → agent → reveal + score"),
           ("fault_detection_check", "does each fault show up in the tools? (no LLM)"),
           ("run_all + calibration", "sweeps: stated confidence vs actual accuracy"),
-          ("31 tests · 18 proofs", "offline tests + prove_three_ideas.py, PASS/FAIL"),
+          ("33 tests · 18 proofs", "offline tests + prove_three_ideas.py, PASS/FAIL"),
           ("run_everything.sh", "the whole project, live, in one command")]
 oy = by + 62
 for name, desc in proofs:

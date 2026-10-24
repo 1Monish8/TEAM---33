@@ -81,6 +81,25 @@ def _use_route(index, why):
     _recent_usage.clear()  # every (key, model) pair has its own per-minute budget
 
 
+def _drop_rejected_key(error):
+    # HTTP 401 "Invalid API Key" (a key deleted in the console mid-run): that key will never work again, so every
+    # route using it is retired for good and the next route takes over. Seen live: the reviewer call failed with it.
+    if len(config.LLM_ROUTES) < 2:
+        return False
+    dead_key = config.LLM_ROUTES[_route][0]
+    for index, (key, _, _) in enumerate(config.LLM_ROUTES):
+        if key == dead_key:
+            _capped_until[index] = float("inf")
+    usable = [i for i in range(len(config.LLM_ROUTES)) if _capped_until.get(i, 0.0) != float("inf")]
+    if not usable:
+        return False
+    now = time.time()
+    free = [i for i in usable if _capped_until.get(i, 0.0) <= now]
+    _use_route(free[0] if free else min(usable, key=lambda i: _capped_until.get(i, 0.0)),
+               "%s REJECTED (invalid key)" % _route_label(_route))
+    return True
+
+
 def _switch_to_fallback(error):
     # Only a DAILY cap moves us off a route: a per-minute burst is fixed by waiting (Groq says how long), and
     # switching on a burst once put a whole sweep on the smaller model while the primary had 979 requests left.
@@ -95,15 +114,17 @@ def _switch_to_fallback(error):
     if free:
         _use_route(free[0], "%s DAILY-CAPPED" % _route_label(_route))
     else:  # Groq's daily window rolls, so the route whose cap clears soonest may have room again
-        _use_route(min((i for i in _capped_until if i != _route), key=_capped_until.get),
-                   "every key and model DAILY-CAPPED")
+        candidates = [i for i in _capped_until if i != _route and _capped_until[i] != float("inf")]
+        if not candidates:
+            return False
+        _use_route(min(candidates, key=_capped_until.get), "every key and model DAILY-CAPPED")
     return True
 
 
 def _maybe_return_to_primary():
     # once a better route's cool-down is over, go back to it
     now = time.time()
-    better = [i for i in range(_route) if _capped_until.get(i, 0.0) <= now]
+    better = [i for i in range(_route) if _capped_until.get(i, 0.0) <= now]  # a rejected key stays at +inf
     if better:
         _use_route(better[0], "cool-down over")
 
@@ -177,6 +198,10 @@ def chat(messages, tools=None, tool_choice="auto", temperature=0.0):
             print("  LLM call failed (%s: %s), retry %d in %.0fs"
                   % (type(error).__name__, str(error)[:160], attempt, wait_seconds), file=sys.stderr, flush=True)
             time.sleep(wait_seconds)
+        except openai.AuthenticationError as error:
+            if _drop_rejected_key(error):
+                continue
+            raise
         except openai.APIStatusError as error:
             # after the transient clause on purpose: 429 and 5xx are APIStatusErrors too
             if error.status_code == 413 or "request too large" in str(error).lower():

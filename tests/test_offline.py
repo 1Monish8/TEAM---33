@@ -265,6 +265,65 @@ def test_a_repeated_tool_call_is_not_run_twice():
     assert ran["n"] == 1   # the second identical call got a reminder, not a second run
 
 
+def test_recovery_must_hold_a_relapse_is_not_recovered():
+    # Found in the control room: restarting payment under its fault flag gave ~1 minute of zero errors, then 100% again.
+    import verify
+    before = {"service": "payment", "reporting": True, "error_ratio": 0.9, "p95_latency_ms": 5.9, "deviation_score": 18.1,
+              "container_state": "running"}
+    healthy = dict(before, error_ratio=0.0, deviation_score=0.0)
+    saved = verify.snapshot, verify._interruptible_sleep
+    verify._interruptible_sleep = lambda *a: False
+    try:
+        for afters, expected in [([healthy, before], False), ([healthy, healthy], True), ([before, healthy], True)]:
+            sequence = iter(afters)
+            verify.snapshot = lambda service, window_minutes=5: dict(next(sequence))
+            result = verify.confirm_recovery(before, progress=lambda text: None)
+            assert result["recovered"] is expected, (afters, result["verdict"])
+            if afters == [healthy, before]:
+                assert result["verdict"].startswith("relapsed")
+    finally:
+        verify.snapshot, verify._interruptible_sleep = saved
+
+
+def test_a_rejected_key_is_dropped_for_good():
+    import openai
+    import types
+    import config
+    import llm
+
+    class Rejected(openai.AuthenticationError):
+        def __init__(self, text):
+            Exception.__init__(self, text)
+
+    asked = []
+
+    class FakeClient:
+        def __init__(self, api_key, **_):
+            self.chat = types.SimpleNamespace(completions=types.SimpleNamespace(create=lambda model, **_: answer(api_key, model)))
+
+    def answer(key, model):
+        asked.append((key, model))
+        if key == "key-a":
+            raise Rejected("Error code: 401 - Invalid API Key")
+        return types.SimpleNamespace(model=model, usage=None, choices=[types.SimpleNamespace(message="hi")])
+
+    saved = (config.LLM_ROUTES, config.LLM_MODEL, config.LLM_API_KEY, llm.OpenAI, llm._client, llm._route,
+             dict(llm._capped_until), llm._wait_for_token_budget)
+    config.LLM_ROUTES = [("key-a", "u", "big"), ("key-b", "u", "big"), ("key-a", "u", "small")]
+    config.LLM_MODEL, config.LLM_API_KEY = "big", "key-a"
+    llm.OpenAI, llm._client, llm._route, llm._wait_for_token_budget = FakeClient, FakeClient("key-a"), 0, lambda _: None
+    llm._capped_until.clear()
+    try:
+        assert llm.chat([{"role": "user", "content": "x"}]) == "hi" and asked[-1] == ("key-b", "big")
+        llm.chat([{"role": "user", "content": "x"}])
+        assert all(key == "key-b" for key, _ in asked[1:])   # never goes back to the rejected key, even after a "cool-down"
+    finally:
+        (config.LLM_ROUTES, config.LLM_MODEL, config.LLM_API_KEY, llm.OpenAI, llm._client, llm._route, capped_until,
+         llm._wait_for_token_budget) = saved
+        llm._capped_until.clear()
+        llm._capped_until.update(capped_until)
+
+
 def test_daily_cap_walks_backup_key_before_smaller_model():
     import openai
     import types

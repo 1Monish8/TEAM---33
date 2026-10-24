@@ -1,0 +1,208 @@
+{
+  "incident_id": "ui-20261024-141749",
+  "generated_at": "2026-10-24T08:51:58Z",
+  "alert": "Error rate above 5% on frontend checkout requests",
+  "status": "diagnosed",
+  "root_cause": {
+    "service": "payment",
+    "fault_type": "application_error",
+    "summary": "The payment service is rejecting checkout requests with an auth_failure due to invalid tokens, causing the frontend to see a high error rate and latency. Users experience checkout failures and long waits."
+  },
+  "symptom_services": [
+    "frontend"
+  ],
+  "confidence": 0.86,
+  "confidence_label": "high",
+  "evidence": [
+    {
+      "service": "payment",
+      "metric": "error_ratio",
+      "value": 0.5031,
+      "promql": "sum by (service_name) (rate(traces_span_metrics_calls_total{status_code=\"STATUS_CODE_ERROR\"}[5m])) / sum by (service_name) (rate(traces_span_metrics_calls_total[5m]))",
+      "timestamp": "2026-10-24T08:47:51Z",
+      "baseline": 0.0,
+      "deviation_score": 10.062,
+      "reference": "metric-2",
+      "kind": "metric",
+      "why_it_matters": "Payment service error ratio spiked to 50%, far above baseline."
+    },
+    {
+      "trace_id": "7db96a495ee1ad8dca63217156cd95c4",
+      "service": "payment",
+      "span_name": "charge",
+      "duration_ms": 1.0,
+      "status": "ERROR",
+      "exception": "Payment request failed. Invalid token. demo.user_context.loyalty_level=gold",
+      "timestamp": "2026-10-24T08:48:47Z",
+      "reference": "trace-5",
+      "kind": "trace",
+      "why_it_matters": "Deepest failing span is in payment, with auth_failure signature."
+    },
+    {
+      "timestamp": "2026-10-24T08:48:47.156Z",
+      "service": "payment",
+      "severity": "warn",
+      "message": "Payment request failed. Invalid token. demo.user_context.loyalty_level=gold",
+      "signature": "auth_failure",
+      "trace_id": "7db96a495ee1ad8dca63217156cd95c4",
+      "reference": "log-6",
+      "kind": "log",
+      "why_it_matters": "Payment logs show repeated auth_failure warnings for invalid token."
+    }
+  ],
+  "proposed_action": {
+    "action": "restart_service",
+    "target": "payment",
+    "parameters": {},
+    "reason": "Payment service is returning auth_failure errors, causing checkout requests to fail at the frontend.",
+    "requires_approval": true
+  },
+  "investigation": {
+    "tool_calls": 4,
+    "tools_used": [
+      "get_container_health",
+      "get_service_health",
+      "search_logs",
+      "search_traces"
+    ],
+    "model": "openai/gpt-oss-120b",
+    "duration_seconds": 248.9,
+    "calibration_notes": []
+  },
+  "timeline": [
+    {
+      "time": "2026-10-24T08:47:49Z",
+      "event": "Alert received: Error rate above 5% on frontend checkout requests"
+    },
+    {
+      "time": "2026-10-24T08:48:47.156Z",
+      "event": "Earliest cited log line from payment"
+    },
+    {
+      "time": "2026-10-24T08:51:58Z",
+      "event": "Diagnosis submitted after 4 tool calls"
+    }
+  ],
+  "prevention": "Add validation for token handling and monitor auth failures to prevent cascade errors.",
+  "review": {
+    "ran": false,
+    "disputed": false,
+    "verdict": "review failed: AuthenticationError: Error code: 401 - {'error': {'message': 'Invalid API Key', 'type': 'invalid_request_error', 'code': 'invalid_api_key'}}"
+  },
+  "action_loop": {
+    "started_at": "2026-10-24T08:51:59Z",
+    "proposed": {
+      "action": "restart_service",
+      "target": "payment",
+      "parameters": {},
+      "reason": "Payment service is returning auth_failure errors, causing checkout requests to fail at the frontend.",
+      "requires_approval": true
+    },
+    "mode": "interactive",
+    "dry_run": {
+      "ok": true,
+      "command": "docker restart payment",
+      "effect": "Container payment stops and starts (or starts, if it was stopped). Requests to it fail for a few seconds; in-memory state (caches, leaked memory) is cleared.",
+      "reversible": false,
+      "undo": "none needed: a restart changes no configuration"
+    },
+    "parameters": {},
+    "approved": true,
+    "approved_by": "taruns (control room)",
+    "approved_at": "2026-10-24T08:53:49Z",
+    "before": {
+      "service": "payment",
+      "reporting": true,
+      "error_ratio": 0.9048,
+      "p95_latency_ms": 5.9,
+      "deviation_score": 18.096,
+      "status_hint": "ERRORS",
+      "container_state": "running",
+      "captured_at": "2026-10-24T08:53:50Z",
+      "window_minutes": 5,
+      "pipeline_warning": null
+    },
+    "before_state": {
+      "container_state": "running",
+      "started_at": "2026-10-24T06:58:23.913455583Z"
+    },
+    "result": {
+      "ok": true,
+      "stdout": "payment",
+      "stderr": ""
+    },
+    "verification": {
+      "recovered": true,
+      "before": {
+        "service": "payment",
+        "reporting": true,
+        "error_ratio": 0.9048,
+        "p95_latency_ms": 5.9,
+        "deviation_score": 18.096,
+        "status_hint": "ERRORS",
+        "container_state": "running",
+        "captured_at": "2026-10-24T08:53:50Z",
+        "window_minutes": 5,
+        "pipeline_warning": null
+      },
+      "after": {
+        "service": "payment",
+        "reporting": true,
+        "error_ratio": 0.0,
+        "p95_latency_ms": 1.9,
+        "deviation_score": 0.0,
+        "status_hint": "ok",
+        "container_state": "running",
+        "captured_at": "2026-10-24T08:56:01Z",
+        "window_minutes": 2,
+        "pipeline_warning": null
+      },
+      "checks": [
+        {
+          "attempt": 1,
+          "after": {
+            "service": "payment",
+            "reporting": true,
+            "error_ratio": 0.0,
+            "p95_latency_ms": 1.9,
+            "deviation_score": 0.0,
+            "status_hint": "ok",
+            "container_state": "running",
+            "captured_at": "2026-10-24T08:56:01Z",
+            "window_minutes": 2,
+            "pipeline_warning": null
+          },
+          "recovered": true,
+          "verdict": "deviation from its own baseline 18.10 -> 0.00 (error ratio 0.9048 -> 0.0000, p95 5.9 -> 1.9 ms)"
+        }
+      ],
+      "verdict": "deviation from its own baseline 18.10 -> 0.00 (error ratio 0.9048 -> 0.0000, p95 5.9 -> 1.9 ms)"
+    },
+    "outcome": "recovered and verified: deviation from its own baseline 18.10 -> 0.00 (error ratio 0.9048 -> 0.0000, p95 5.9 -> 1.9 ms)",
+    "finished_at": "2026-10-24T08:56:01Z",
+    "action_log_entries": [
+      {
+        "incident_id": "ui-20261024-141749",
+        "purpose": "remedy",
+        "action": "restart_service",
+        "target": "payment",
+        "parameters": {},
+        "approved": true,
+        "approved_by": "taruns (control room)",
+        "planned": {
+          "ok": true,
+          "command": "docker restart payment",
+          "effect": "Container payment stops and starts (or starts, if it was stopped). Requests to it fail for a few seconds; in-memory state (caches, leaked memory) is cleared.",
+          "reversible": false,
+          "undo": "none needed: a restart changes no configuration"
+        },
+        "result": {
+          "ok": true,
+          "stdout": "payment",
+          "stderr": ""
+        },
+        "logged_at": "2026-10-24T08:54:00Z"
+      }
+    ]
+  }
+}

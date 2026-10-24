@@ -15,7 +15,7 @@ import tools
 # pre-action window and reports a false failure. After WAIT_SECONDS we read a 2-minute window, which by then
 # holds (almost) only post-action data; a 5-minute window would still be dominated by the old errors.
 WAIT_SECONDS = 120
-RECHECK_SECONDS = 60
+RECHECK_SECONDS = 90   # the payment relapse came back ~80 s after the first good check
 VERIFY_WINDOW_MINUTES = 2
 
 
@@ -38,7 +38,11 @@ def snapshot(service, window_minutes=5):
 
 
 def confirm_recovery(before, wait_seconds=WAIT_SECONDS, kill_switch_file=None, progress=print):
-    """Wait for metrics to catch up, compare with `before`; one re-check before calling it a failure."""
+    """Wait for metrics to catch up, compare with `before`, then check AGAIN: recovery counts only if it holds.
+    A failing first check gets one re-check before it is called a failure; a passing first check gets one
+    stability check before it is called a success. (Found in the control room: restarting payment under the
+    paymentFailure flag gave ~1 minute of zero errors while it reconnected to flagd, then 100% errors again;
+    a single check called it 'recovered and verified'.)"""
     checks = []
     for attempt, wait in enumerate((wait_seconds, RECHECK_SECONDS), start=1):
         if _interruptible_sleep(wait, kill_switch_file, progress, attempt):
@@ -47,11 +51,22 @@ def confirm_recovery(before, wait_seconds=WAIT_SECONDS, kill_switch_file=None, p
         after = snapshot(before["service"], window_minutes=VERIFY_WINDOW_MINUTES)
         recovered, verdict = _judge(before, after)
         checks.append({"attempt": attempt, "after": after, "recovered": recovered, "verdict": verdict})
-        progress("  verification check %d: %s" % (attempt, verdict))
-        if recovered is not False:  # True, or None (cannot tell): a re-check will not change "cannot tell"
+        holding = attempt == 2 and checks[0]["recovered"]
+        progress("  verification check %d%s: %s" % (attempt, " (does it hold?)" if holding else "", verdict))
+        if recovered is None:  # cannot tell: another look will not change that
             break
-    return {"recovered": checks[-1]["recovered"], "before": before, "after": checks[-1]["after"],
-            "checks": checks, "verdict": checks[-1]["verdict"]}
+    first, last = checks[0], checks[-1]
+    if len(checks) == 2 and first["recovered"] is True:
+        if last["recovered"] is True:
+            verdict = "held for two checks %ds apart: %s" % (RECHECK_SECONDS, last["verdict"])
+        elif last["recovered"] is False:
+            verdict = ("relapsed: looked recovered at first (%s) but the symptom came back (%s)"
+                       % (first["verdict"], last["verdict"]))
+        else:
+            verdict = "cannot tell: looked recovered at first, the stability check could not judge (%s)" % last["verdict"]
+        return {"recovered": last["recovered"], "before": before, "after": last["after"], "checks": checks, "verdict": verdict}
+    return {"recovered": last["recovered"], "before": before, "after": last["after"], "checks": checks,
+            "verdict": last["verdict"]}
 
 
 def _judge(before, after):

@@ -513,6 +513,11 @@ def apply_review(diagnosis):
     on the first live tests the reviewer disputed every correct diagnosis that way."""
     review = review_diagnosis(diagnosis)
     diagnosis["review"] = review
+    if not review.get("ran"):
+        # no second opinion is not a confirmation: say so instead of letting it read as CONFIRMED
+        diagnosis["investigation"]["calibration_notes"].append("the reviewer could not run (%s): no second opinion"
+                                                               % review.get("verdict", "")[:120])
+        return diagnosis
     if not review.get("disputed"):
         return diagnosis
     deviation = dict(tools.last_deviation_ranking)
