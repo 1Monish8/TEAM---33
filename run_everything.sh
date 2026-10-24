@@ -29,7 +29,9 @@ fail() { printf '\n\033[1;31m%s\033[0m\n' "$1"; exit 1; }
 
 step "0. nothing else may inject faults at the same time"
 if pgrep -f "run_all.py|fault_detection_check.py|demo.sh" >/dev/null; then
-  echo "Another practice run is active (sweep / detection check / demo). Running both would spoil both."
+  echo "Another practice run is active. Running both would spoil both. Active now:"
+  pgrep -fl "run_all.py|fault_detection_check.py|demo.sh" | grep -v "while pgrep" | sed 's/^[0-9]* /   /' | cut -c1-110
+  echo "Progress: tail -3 runs/fault-detection.log runs/day2-final-sweep.log  ·  answer N to wait, then run this again"
   read -r -p "Stop it and continue? [y/N] " answer
   [ "$answer" = "y" ] || fail "Stopped. Nothing was changed."
   pkill -f "while pgrep -f fault_detection_check" ; pkill -f fault_detection_check.py ; pkill -f run_all.py ; sleep 2
