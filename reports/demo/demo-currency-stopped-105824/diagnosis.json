@@ -1,0 +1,209 @@
+{
+  "incident_id": "demo-currency-stopped-105824",
+  "generated_at": "2026-10-24T05:33:50Z",
+  "alert": "Error rate elevated on frontend",
+  "status": "diagnosed",
+  "root_cause": {
+    "service": "currency",
+    "fault_type": "service_down",
+    "summary": "The currency service container has stopped (exited), causing DNS lookup failures for the frontend service. This results in a high error rate observed on the frontend. Users experience failed API requests when the frontend tries to call currency."
+  },
+  "symptom_services": [
+    "frontend",
+    "frontend-proxy"
+  ],
+  "confidence": 0.6,
+  "confidence_label": "medium",
+  "evidence": [
+    {
+      "service": "currency",
+      "metric": "container_state",
+      "value": "exited",
+      "promql": "docker inspect currency (State.Status)",
+      "timestamp": "2026-10-24T05:28:30Z",
+      "deviation_score": 10.0,
+      "reference": "metric-1",
+      "kind": "metric",
+      "why_it_matters": "Service health shows currency is NOT_REPORTING: DOWN with high deviation_score."
+    },
+    {
+      "service": "currency",
+      "metric": "container.not_running",
+      "value": "exited",
+      "promql": "docker inspect currency",
+      "timestamp": "2026-10-24T05:30:40Z",
+      "reference": "metric-13",
+      "kind": "metric",
+      "why_it_matters": "Container health reports currency NOT_RUNNING (exited)."
+    },
+    {
+      "trace_id": "ab4a8248a8b66588436e0d83d0bd08f9",
+      "service": "frontend",
+      "span_name": "dns.lookup",
+      "duration_ms": 33.4,
+      "status": "ERROR",
+      "exception": "getaddrinfo ENOTFOUND currency",
+      "timestamp": "2026-10-24T05:29:04Z",
+      "reference": "trace-7",
+      "kind": "trace",
+      "why_it_matters": "Traces from frontend show deepest failing span DNS lookup ENOTFOUND currency (dns_failure)."
+    }
+  ],
+  "proposed_action": {
+    "action": "restart_service",
+    "target": "currency",
+    "parameters": {},
+    "reason": "Currency service container is stopped, causing DNS lookup failures in frontend and elevated error rate.",
+    "requires_approval": true
+  },
+  "investigation": {
+    "tool_calls": 4,
+    "tools_used": [
+      "get_container_health",
+      "get_service_health",
+      "search_logs",
+      "search_traces"
+    ],
+    "model": "openai/gpt-oss-120b",
+    "duration_seconds": 324.7,
+    "calibration_notes": [
+      "confidence capped from 0.86 to 0.70: only 1 evidence kind(s) name currency",
+      "confidence lowered from 0.70 to 0.60: the reviewer disputed it with a grounded alternative (payment, deviation 14.118 vs 10.0 for currency)"
+    ]
+  },
+  "timeline": [
+    {
+      "time": "2026-10-24T05:28:25Z",
+      "event": "Alert received: Error rate elevated on frontend"
+    },
+    {
+      "time": "2026-10-24T05:33:50Z",
+      "event": "Diagnosis submitted after 4 tool calls"
+    }
+  ],
+  "prevention": "Add health checks and auto-restart for currency service to avoid downtime.",
+  "review": {
+    "ran": true,
+    "disputed": true,
+    "better_candidate": "payment",
+    "verdict": "DISPUTED: the payment service has a significantly higher deviation_score (14.118) than currency, indicating it deviated more from its baseline and is a more likely root cause, with currency possibly downstream; better candidate: payment.",
+    "model": "openai/gpt-oss-120b",
+    "grounded": true
+  },
+  "action_loop": {
+    "started_at": "2026-10-24T05:33:51Z",
+    "proposed": {
+      "action": "restart_service",
+      "target": "currency",
+      "parameters": {},
+      "reason": "Currency service container is stopped, causing DNS lookup failures in frontend and elevated error rate.",
+      "requires_approval": true
+    },
+    "mode": "interactive",
+    "dry_run": {
+      "ok": true,
+      "command": "docker restart currency",
+      "effect": "Container currency stops and starts (or starts, if it was stopped). Requests to it fail for a few seconds; in-memory state (caches, leaked memory) is cleared.",
+      "reversible": false,
+      "undo": "none needed: a restart changes no configuration"
+    },
+    "parameters": {},
+    "approved": true,
+    "approved_by": "taruns",
+    "approved_at": "2026-10-24T05:34:35Z",
+    "before": {
+      "service": "currency",
+      "reporting": false,
+      "error_ratio": 0.0,
+      "p95_latency_ms": null,
+      "deviation_score": 10.0,
+      "status_hint": "NOT_REPORTING: DOWN (its container is exited)",
+      "container_state": "exited",
+      "captured_at": "2026-10-24T05:34:36Z",
+      "window_minutes": 5,
+      "pipeline_warning": null
+    },
+    "before_state": {
+      "container_state": "exited",
+      "started_at": "2026-10-24T04:41:06.109202631Z"
+    },
+    "result": {
+      "ok": true,
+      "stdout": "currency",
+      "stderr": ""
+    },
+    "verification": {
+      "recovered": true,
+      "before": {
+        "service": "currency",
+        "reporting": false,
+        "error_ratio": 0.0,
+        "p95_latency_ms": null,
+        "deviation_score": 10.0,
+        "status_hint": "NOT_REPORTING: DOWN (its container is exited)",
+        "container_state": "exited",
+        "captured_at": "2026-10-24T05:34:36Z",
+        "window_minutes": 5,
+        "pipeline_warning": null
+      },
+      "after": {
+        "service": "currency",
+        "reporting": true,
+        "error_ratio": 0.0,
+        "p95_latency_ms": null,
+        "deviation_score": 0.5,
+        "status_hint": "IDLE (container running, but no spans: nothing upstream is calling it; usually a victim of a failure further up, not the cause)",
+        "container_state": "running",
+        "captured_at": "2026-10-24T05:36:38Z",
+        "window_minutes": 2,
+        "pipeline_warning": null
+      },
+      "checks": [
+        {
+          "attempt": 1,
+          "after": {
+            "service": "currency",
+            "reporting": true,
+            "error_ratio": 0.0,
+            "p95_latency_ms": null,
+            "deviation_score": 0.5,
+            "status_hint": "IDLE (container running, but no spans: nothing upstream is calling it; usually a victim of a failure further up, not the cause)",
+            "container_state": "running",
+            "captured_at": "2026-10-24T05:36:38Z",
+            "window_minutes": 2,
+            "pipeline_warning": null
+          },
+          "recovered": true,
+          "verdict": "currency was not reporting; now reporting with error ratio 0.0000"
+        }
+      ],
+      "verdict": "currency was not reporting; now reporting with error ratio 0.0000"
+    },
+    "outcome": "recovered and verified: currency was not reporting; now reporting with error ratio 0.0000",
+    "finished_at": "2026-10-24T05:36:38Z",
+    "action_log_entries": [
+      {
+        "incident_id": "demo-currency-stopped-105824",
+        "purpose": "remedy",
+        "action": "restart_service",
+        "target": "currency",
+        "parameters": {},
+        "approved": true,
+        "approved_by": "taruns",
+        "planned": {
+          "ok": true,
+          "command": "docker restart currency",
+          "effect": "Container currency stops and starts (or starts, if it was stopped). Requests to it fail for a few seconds; in-memory state (caches, leaked memory) is cleared.",
+          "reversible": false,
+          "undo": "none needed: a restart changes no configuration"
+        },
+        "result": {
+          "ok": true,
+          "stdout": "currency",
+          "stderr": ""
+        },
+        "logged_at": "2026-10-24T05:34:36Z"
+      }
+    ]
+  }
+}

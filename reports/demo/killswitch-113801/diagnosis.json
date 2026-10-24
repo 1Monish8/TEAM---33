@@ -1,0 +1,87 @@
+{
+  "incident_id": "killswitch-113801",
+  "generated_at": "2026-10-24T06:09:04Z",
+  "alert": "Checkout error rate is high",
+  "status": "escalated",
+  "root_cause": {
+    "service": null,
+    "fault_type": "unknown",
+    "summary": "Automatic escalation: the investigation was stopped by the KILL_SWITCH. The cited items are the most suspicious signals the tools returned; a human should take over."
+  },
+  "symptom_services": [],
+  "confidence": 0.2,
+  "confidence_label": "low",
+  "evidence": [
+    {
+      "service": "payment",
+      "metric": "error_ratio",
+      "value": 1.0,
+      "promql": "sum by (service_name) (rate(traces_span_metrics_calls_total{status_code=\"STATUS_CODE_ERROR\"}[5m])) / sum by (service_name) (rate(traces_span_metrics_calls_total[5m]))",
+      "timestamp": "2026-10-24T06:08:02Z",
+      "baseline": 0.0,
+      "deviation_score": 20.0,
+      "reference": "metric-1",
+      "kind": "metric"
+    },
+    {
+      "service": "checkout",
+      "metric": "error_ratio",
+      "value": 0.4,
+      "promql": "sum by (service_name) (rate(traces_span_metrics_calls_total{status_code=\"STATUS_CODE_ERROR\"}[5m])) / sum by (service_name) (rate(traces_span_metrics_calls_total[5m]))",
+      "timestamp": "2026-10-24T06:08:02Z",
+      "baseline": 0.0,
+      "deviation_score": 8.0,
+      "reference": "metric-2",
+      "kind": "metric"
+    },
+    {
+      "service": "frontend",
+      "metric": "error_ratio",
+      "value": 0.0966,
+      "promql": "sum by (service_name) (rate(traces_span_metrics_calls_total{status_code=\"STATUS_CODE_ERROR\"}[5m])) / sum by (service_name) (rate(traces_span_metrics_calls_total[5m]))",
+      "timestamp": "2026-10-24T06:08:02Z",
+      "baseline": 0.0012,
+      "deviation_score": 1.908,
+      "reference": "metric-3",
+      "kind": "metric"
+    },
+    {
+      "service": "frontend-proxy",
+      "metric": "error_ratio",
+      "value": 0.0746,
+      "promql": "sum by (service_name) (rate(traces_span_metrics_calls_total{status_code=\"STATUS_CODE_ERROR\"}[5m])) / sum by (service_name) (rate(traces_span_metrics_calls_total[5m]))",
+      "timestamp": "2026-10-24T06:08:02Z",
+      "baseline": 0.002,
+      "deviation_score": 1.452,
+      "reference": "metric-4",
+      "kind": "metric"
+    }
+  ],
+  "proposed_action": {
+    "action": "escalate_to_human",
+    "target": null,
+    "parameters": {},
+    "reason": "The agent could not reach a confident, evidence-backed diagnosis.",
+    "requires_approval": true
+  },
+  "investigation": {
+    "tool_calls": 2,
+    "tools_used": [
+      "get_service_health",
+      "search_traces"
+    ],
+    "model": "openai/gpt-oss-120b",
+    "duration_seconds": 62.2,
+    "calibration_notes": []
+  },
+  "timeline": [
+    {
+      "time": "2026-10-24T06:08:01Z",
+      "event": "Alert received: Checkout error rate is high"
+    },
+    {
+      "time": "2026-10-24T06:09:04Z",
+      "event": "Diagnosis submitted after 2 tool calls"
+    }
+  ]
+}
