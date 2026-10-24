@@ -265,6 +265,22 @@ def get_service_health(window_minutes=5):
         else:
             row["status_hint"] = "ok"
 
+    # Slow TAIL (P0 slow dependency affecting a few requests): intlShippingSlowdown delays only non-US orders, ~1 in 9,
+    # about 2 calls in a whole incident. p95 never moves, but an operation that NEVER takes 2 s suddenly doing so is
+    # a change from its own normal. Server spans only, so a caller waiting on it is not counted twice.
+    for service, (operation, slow_now, slow_base, waiting) in _slow_tail(window).items():
+        row = rows.get(service)
+        if row is None or service in CLIENT_SERVICES or not row["status_hint"].startswith("ok"):
+            continue
+        row["slow_tail"] = {"operation": operation, "calls_over_2s": slow_now, "baseline_calls_over_2s": slow_base,
+                            "waiting_on_a_dependency": waiting}
+        row["status_hint"] = ("SLOW_TAIL (%d call(s) of '%s' took over 2 s in the last %d min; usually %s. %s)"
+                              % (max(1, round(slow_now)), operation, window_minutes,
+                                 "none" if slow_base < 0.5 else "about %d" % round(slow_base),
+                                 "Its own outgoing calls are slow too: it is WAITING on a deeper service, not the cause"
+                                 if waiting else "Its outgoing calls are fine, so the delay is INSIDE this service; "
+                                 "find the slow requests with search_traces(only_errors=false, min_duration_ms=2000)"))
+
     # Traffic (P0 surge, P1 retry storms): request rate against the service's own normal. User traffic enters at
     # frontend-proxy, so a backend whose calls surge while user traffic does not is being hammered by retries or
     # duplicate events from its callers, not by users.
@@ -297,6 +313,13 @@ def get_service_health(window_minutes=5):
             continue  # only unhealthy rows are worth citing; keeps the registry small
         metric_name = "error_ratio" if row["status_hint"].startswith("ERRORS") else (
             "p95_latency_ms" if row["status_hint"].startswith(("SLOW", "SLOWER")) else "requests_per_second")
+        if row["status_hint"].startswith("SLOW_TAIL"):
+            row["ref"] = register_evidence_item("metric", {
+                "service": row["service"], "metric": "calls_over_2s", "operation": row["slow_tail"]["operation"],
+                "value": row["slow_tail"]["calls_over_2s"], "baseline": row["slow_tail"]["baseline_calls_over_2s"],
+                "promql": _SLOW_CALLS % {"kind": "SPAN_KIND_SERVER", "window": window}, "timestamp": _now_iso(),
+                "deviation_score": row["deviation_score"]})
+            continue
         if row["status_hint"].startswith("NOT_REPORTING: DOWN"):
             row["ref"] = register_evidence_item("metric", {
                 "service": row["service"], "metric": "container_state", "value": container_state.get(row["service"]),
@@ -326,6 +349,41 @@ def get_service_health(window_minutes=5):
                                       "nothing is wrong; investigate with search_traces, search_logs and get_container_health."
                                       % ("no samples at all" if staleness is None else "newest sample is %ds old" % staleness))
     return result
+
+
+_SLOW_CALLS = ('sum by (service_name, span_name) (increase(traces_span_metrics_duration_milliseconds_bucket'
+               '{span_kind="%(kind)s",le="+Inf"}[%(window)s])) - sum by (service_name, span_name) (increase('
+               'traces_span_metrics_duration_milliseconds_bucket{span_kind="%(kind)s",le="2000"}[%(window)s]))')
+
+
+def _slow_tail(window):
+    # service -> (operation, calls over 2 s now, its usual count, waiting): only operations whose slow calls rose
+    # from their own normal. Baseline = median 5-minute count over the last 2 h, excluding the last 10 min (as for
+    # p95). waiting = its OWN outgoing calls are slow too, so it is waiting on a deeper service (back-tested on the
+    # shipping slowdown: frontend and checkout were flagged with shipping and frontend ranked first).
+    try:
+        now = run_prometheus_query(_SLOW_CALLS % {"kind": "SPAN_KIND_SERVER", "window": window})
+        base = run_prometheus_query("quantile_over_time(0.5, (%s)[2h:1m] offset %s)" % (
+            _SLOW_CALLS % {"kind": "SPAN_KIND_SERVER", "window": "5m"}, BASELINE_GAP))
+        outgoing = {}
+        for r in run_prometheus_query(_SLOW_CALLS % {"kind": "SPAN_KIND_CLIENT", "window": window}):
+            if float(r["value"][1]) == float(r["value"][1]):
+                service = r["metric"].get("service_name")
+                outgoing[service] = outgoing.get(service, 0.0) + float(r["value"][1])
+    except Exception:
+        return {}
+    usual = {(r["metric"].get("service_name"), r["metric"].get("span_name")): float(r["value"][1]) for r in base}
+    found = {}
+    for r in now:
+        key = (r["metric"].get("service_name"), r["metric"].get("span_name"))
+        slow_now, slow_base = float(r["value"][1]), usual.get(key, 0.0)
+        if slow_now != slow_now or key[0] in HIDDEN_SERVICES:
+            continue
+        # an operation that is normally never slow: one 2 s+ call is a change; otherwise 3x its usual and at least 3
+        if (slow_base < 0.5 and slow_now >= 0.9) or (slow_now >= 3 and slow_now >= 3 * slow_base):
+            if key[0] not in found or slow_now > found[key[0]][1]:
+                found[key[0]] = (key[1], slow_now, slow_base, outgoing.get(key[0], 0.0) >= max(0.9, 0.5 * slow_now))
+    return found
 
 
 def _traffic_ratio(row):
@@ -400,7 +458,13 @@ def _deviation_score(row):
     ratio = _traffic_ratio(row)
     if ratio and (row.get("requests_per_second") or 0) >= 1.0:
         traffic_excess = min(50.0, max(0.0, ratio - 1.0)) if ratio >= 3 else 0.0  # only a real surge counts
-    return round(max(error_delta * 20.0, latency_excess, traffic_excess), 3)
+    tail_excess = 0.0
+    if row.get("slow_tail"):
+        # a few very slow calls in an operation that is normally never slow: real, but weaker than a whole-service shift
+        tail_excess = min(10.0, 3.0 * row["slow_tail"]["calls_over_2s"] / max(row["slow_tail"]["baseline_calls_over_2s"], 1.0))
+        if row["slow_tail"]["waiting_on_a_dependency"]:
+            tail_excess = min(tail_excess, 1.0)  # a caller waiting on the slow service ranks below it
+    return round(max(error_delta * 20.0, latency_excess, traffic_excess, tail_excess), 3)
 
 
 MIN_RPS_FOR_LATENCY = 0.1

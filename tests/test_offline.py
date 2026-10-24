@@ -311,6 +311,11 @@ def test_future_timestamps_raise_a_clock_skew_warning():
 def _fake_health(rows, containers, logging=()):
     """Run get_service_health against fake Prometheus rows {field: {service: value}} and fake docker states."""
     def fake_query(promql):
+        if "SPAN_KIND" in promql:  # slow-tail counts per operation: {service: value}, operation "op"
+            field = ("slow_calls_baseline" if "quantile_over_time" in promql else
+                     "slow_calls_client" if "SPAN_KIND_CLIENT" in promql else "slow_calls")
+            return [{"metric": {"service_name": s, "span_name": "op"}, "value": [0, str(v)]}
+                    for s, v in rows.get(field, {}).items()]
         if "quantile_over_time" in promql and "STATUS_CODE_ERROR" in promql:
             field = "error_ratio_baseline"
         elif "quantile_over_time" in promql and "histogram_quantile" in promql:
@@ -353,6 +358,25 @@ def test_traffic_surge_vs_retry_storm_vs_telemetry_gap():
     gap = _fake_health({"requests_per_second": {"frontend-proxy": 10.0, "fraud-detection": 0.0},
                         "requests_per_second_baseline": {"frontend-proxy": 10.0}}, running, logging=["fraud-detection"])
     assert gap["fraud-detection"]["status_hint"].startswith("TELEMETRY_GAP")
+
+
+def test_slow_tail_names_the_deepest_slow_service_not_its_callers():
+    # intlShippingSlowdown: 2 of ~20 shipments take 5 s. p95 does not move; shipping's ship-order normally has no
+    # call over 2 s. Its callers are slow too, but their OWN outgoing calls are slow: they are waiting on shipping.
+    running = {"frontend": "running", "checkout": "running", "shipping": "running", "ad": "running"}
+    base = {"requests_per_second": {"frontend": 2.0, "checkout": 0.5, "shipping": 0.5, "ad": 1.0},
+            "requests_per_second_baseline": {"frontend": 2.0, "checkout": 0.5, "shipping": 0.5, "ad": 1.0},
+            "p95_latency_ms": {"frontend": 300.0, "checkout": 200.0, "shipping": 10.0, "ad": 8.0},
+            "p95_baseline_ms": {"frontend": 300.0, "checkout": 200.0, "shipping": 10.0, "ad": 8.0}}
+    health = _fake_health(dict(base, slow_calls={"frontend": 5.0, "checkout": 2.0, "shipping": 2.0},
+                               slow_calls_baseline={"frontend": 0.6}, slow_calls_client={"frontend": 5.0, "checkout": 2.0}),
+                          running)
+    assert health["shipping"]["status_hint"].startswith("SLOW_TAIL") and "INSIDE" in health["shipping"]["status_hint"]
+    assert "WAITING" in health["checkout"]["status_hint"] and "WAITING" in health["frontend"]["status_hint"]
+    assert tools.last_deviation_ranking[0][0] == "shipping"
+    # a chronic tail (as many slow calls as usual) is not the incident
+    quiet = _fake_health(dict(base, slow_calls={"frontend": 3.0}, slow_calls_baseline={"frontend": 3.0}), running)
+    assert quiet["frontend"]["status_hint"] == "ok" and quiet["shipping"]["status_hint"] == "ok"
 
 
 def test_dependency_health_flags_queue_database_and_cache_faults():
