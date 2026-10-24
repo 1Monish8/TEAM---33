@@ -25,6 +25,8 @@ When it isn't confident, it **escalates with its findings** instead of guessing.
 
 ![architecture](docs/architecture.png)
 
+The detailed data-flow map (where each piece of data is stored, the exact endpoint the agent fetches it from, and every file written to disk) is [docs/architecture-detailed.png](docs/architecture-detailed.png).
+
 ## Quick start
 
 ```bash
@@ -165,7 +167,7 @@ If recovery isn't confirmed, the inverse action runs (for example, restoring the
 | `check_stack.py`, `calibration.py`, `run_all.py`, `demo.sh`, `run_day1.sh` | Operator tooling (the agent never calls these) |
 | `practice/` | Stand-in faultctl and the practice incidents. Expected answers are read **only** by the scorers. |
 | `tests/test_offline.py` | 20 tests: evidence guard, calibration, stale evidence, deepest span, flag redaction, baselines, DOWN vs IDLE, the infrastructure consistency check, grounded reviewer disputes, API-rejected tool calls, and every action-loop path (approve, reject, dry run, kill switch, low confidence, recovery, rollback, hallucination demo) |
-| `docs/` | `architecture.png` (one page), `flow.png`, `TEAM_SPLIT.md`, `mentor-walkthrough.md`, `demo-script-day2.md`, `DAY1_REPORT.md`, `kickoff-and-mentor-questions.md` |
+| `docs/` | `architecture.png` (one page), `architecture-detailed.png` (data-flow map), `flow.png`, `TEAM_SPLIT.md`, `mentor-walkthrough.md`, `demo-script-day2.md`, `DAY1_REPORT.md`, `kickoff-and-mentor-questions.md` |
 | `reports/` | Every sweep (scoring table, `verdict.json`, transcripts) and the checkpoint runs |
 | `evaluation-note.md` | What it got right and wrong, before and after the fixes, plus the calibration table |
 
