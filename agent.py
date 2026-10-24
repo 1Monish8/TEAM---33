@@ -64,7 +64,10 @@ TOOL_DESCRIPTIONS = [
            "min_severity": {"type": "string", "enum": ["WARN", "ERROR"]},
            "limit": {"type": "integer"},
            "window_minutes": WINDOW}),
-    _tool("get_deploy_history", "Containers started, stopped, restarted or re-limited recently.",
+    _tool("get_deploy_history", "Recent changes: containers recreated (config/image), restarted, stopped, crashed, re-limited or detached.",
+          {"window_minutes": WINDOW}),
+    _tool("get_dependency_health", "Kafka consumer groups (lag, members), PostgreSQL (connections vs max, deadlocks), the Valkey "
+          "cache (down, rejected connections, evictions) and host disk, each against its own baseline.",
           {"window_minutes": WINDOW}),
     _tool("submit_diagnosis", "Final answer. Ends the investigation. Cite evidence only by refs tools returned.",
           {"status": {"type": "string", "enum": ["diagnosed", "escalated"]},
@@ -81,7 +84,11 @@ TOOL_DESCRIPTIONS = [
            "action_parameters": {"type": ["object", "null"], "description": "Optional, e.g. {\"user_count\": 1} for throttle_load. "
                                  "Never a flag name: you do not know flag names."},
            "action_reason": {"type": "string"},
-           "prevention": {"type": ["string", "null"], "description": "One change that would stop this recurring."}},
+           "prevention": {"type": ["string", "null"], "description": "One change that would stop this recurring."},
+           "additional_findings": {"type": ["array", "null"], "description": "Only if the evidence shows a SECOND independent "
+                                   "problem: [{\"service\": ..., \"finding\": ..., \"refs\": [...]}]. Leave out otherwise.",
+                                   "items": {"type": "object", "properties": {"service": {"type": "string"},
+                                             "finding": {"type": "string"}, "refs": {"type": "array", "items": {"type": "string"}}}}}},
           ["status", "root_cause_service", "fault_type", "root_cause_summary", "confidence", "evidence",
            "action", "action_target", "action_reason"]),
 ]
@@ -94,6 +101,7 @@ AVAILABLE_TOOLS = {
     "get_trace": tools.get_trace,
     "search_logs": tools.search_logs,
     "get_deploy_history": tools.get_deploy_history,
+    "get_dependency_health": tools.get_dependency_health,
 }
 
 
@@ -112,6 +120,30 @@ def _is_stale(evidence_item, run):
     except ValueError:
         return False  # no timestamp: cannot tell, do not penalise
     return moment.timestamp() < run["started"] - STALE_EVIDENCE_MINUTES * 60
+
+
+def _known_arguments(function, arguments):
+    # P2 invalid tool output: a model sometimes invents parameters. Drop the ones the tool does not have instead of
+    # crashing it; type errors still come back to the model as {"error": ...}.
+    import inspect
+    accepted = set(inspect.signature(function).parameters)
+    return {key: value for key, value in (arguments or {}).items() if key in accepted}
+
+
+def _additional_findings(raw):
+    """P2 multiple simultaneous faults: secondary problems, each backed by real refs (same registry check)."""
+    findings = []
+    for item in raw or []:
+        if not isinstance(item, dict) or not item.get("service"):
+            continue
+        refs = [str(ref) for ref in item.get("refs") or []]
+        invented = tools.check_cited_evidence(refs)
+        if invented:
+            return ("additional_findings cites references no tool returned in this run: " + ", ".join(invented)
+                    + ". Resubmit citing only refs you actually received.")
+        findings.append({"service": str(item["service"]), "finding": str(item.get("finding", ""))[:300],
+                         "evidence": [dict(tools.evidence_registry[ref]) for ref in refs]})
+    return findings[:3]
 
 
 def _label_for(confidence):
@@ -214,6 +246,11 @@ def build_diagnosis(arguments, run):
     }
     if arguments.get("prevention"):
         diagnosis["prevention"] = arguments["prevention"]
+    findings = _additional_findings(arguments.get("additional_findings"))
+    if isinstance(findings, str):
+        return None, findings
+    if findings:
+        diagnosis["additional_findings"] = findings
     problems = report.schema_errors(diagnosis)
     if problems:
         return None, "Your submission does not fit the output schema: " + "; ".join(problems[:5])
@@ -333,7 +370,7 @@ def run_investigation(alert_text, incident_id=None, maximum_iterations=None, tra
             else:
                 started = time.time()
                 try:
-                    result = AVAILABLE_TOOLS[name](**arguments)
+                    result = AVAILABLE_TOOLS[name](**_known_arguments(AVAILABLE_TOOLS[name], arguments))
                 except Exception as error:  # a broken tool must never kill the run; tell the model instead
                     result = {"error": type(error).__name__ + ": " + str(error)[:300]}
                 run["log"].append({"tool": name, "arguments": arguments})

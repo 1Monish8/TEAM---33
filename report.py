@@ -38,6 +38,11 @@ def render_markdown(diagnosis):
         lines.append("_No evidence cited._")
     for item in diagnosis["evidence"]:
         lines.append("- `" + item["reference"] + "` " + _evidence_one_liner(item))
+    if diagnosis.get("additional_findings"):
+        lines += ["", "## Additional independent problems (multiple faults)", ""]
+        for finding in diagnosis["additional_findings"]:
+            refs = ", ".join("`%s`" % e["reference"] for e in finding.get("evidence", []))
+            lines.append("- **%s**: %s%s" % (finding["service"], finding["finding"], (" (" + refs + ")") if refs else ""))
     lines += [
         "",
         "## Proposed action (needs human approval)",

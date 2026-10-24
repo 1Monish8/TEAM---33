@@ -61,6 +61,15 @@
             "latency",
             "traffic_surge",
             "queue_backlog",
+            "network_failure",
+            "database",
+            "cache_failure",
+            "configuration_change",
+            "retry_storm",
+            "telemetry_gap",
+            "clock_skew",
+            "disk_exhaustion",
+            "multiple_faults",
             "unknown"
           ]
         },
@@ -265,6 +274,32 @@
         },
         "action_log_entries": {
           "type": "array"
+        }
+      }
+    },
+    "additional_findings": {
+      "type": "array",
+      "description": "Secondary independent problems (multiple simultaneous faults), each with registry-checked evidence.",
+      "items": {
+        "type": "object",
+        "required": [
+          "service",
+          "finding",
+          "evidence"
+        ],
+        "properties": {
+          "service": {
+            "type": "string"
+          },
+          "finding": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/evidence_item"
+            }
+          }
         }
       }
     }

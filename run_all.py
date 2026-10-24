@@ -95,7 +95,7 @@ def write_table(rows, path):
 
 
 def main():
-    names = sys.argv[1:] or list(INCIDENTS)
+    names = sys.argv[1:] or [name for name, incident in INCIDENTS.items() if not incident.get("helper")]
     stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M")
     out_dir = HERE / "reports" / ("sweep-" + stamp)
     out_dir.mkdir(parents=True, exist_ok=True)

@@ -28,6 +28,9 @@ def _docker(*args):
     return subprocess.run(["docker", *args], capture_output=True, text=True, timeout=60)
 
 
+DEMO_NETWORK = "opentelemetry-demo"
+
+
 def _vm_cpus():
     return subprocess.run(["docker", "info", "--format", "{{.NCPU}}"], capture_output=True, text=True, timeout=20).stdout.strip() or "8"
 
@@ -85,6 +88,29 @@ def inject(name):
         state.setdefault("loop_pids", []).append(loop.pid)
     elif kind == "cpu_starve":
         _docker("update", "--cpus", incident["cpus"], incident["container"])
+    elif kind == "pause":
+        # P2: frozen container. Its port still accepts connections, but nothing answers: callers hang and time out
+        _docker("pause", incident["container"])
+    elif kind == "network_disconnect":
+        # P1/P2: network partition. Callers can no longer resolve its name (DNS failure) or reach it (timeout)
+        _docker("network", "disconnect", DEMO_NETWORK, incident["container"])
+    elif kind == "memory_starve":
+        # P0: memory exhaustion. Remember the original limits so reset restores exactly what was there
+        limits = subprocess.run(["docker", "inspect", "-f", "{{.HostConfig.Memory}} {{.HostConfig.MemorySwap}}",
+                                 incident["container"]], capture_output=True, text=True, timeout=20).stdout.split()
+        state.setdefault("original_memory", {})[incident["container"]] = limits
+        _docker("update", "--memory", incident["memory"], "--memory-swap", incident["memory"], incident["container"])
+    elif kind == "restart_once":
+        # P1: a stand-in "deploy": the container is restarted, which get_deploy_history reports
+        _docker("restart", incident["container"])
+    elif kind == "combo":
+        # P2: several faults at once; each part is injected (and later reset) on its own
+        _save_state(state)
+        for part in incident["parts"]:
+            inject(part)
+            if incident.get("pause_between_seconds"):
+                time.sleep(incident["pause_between_seconds"])
+        state = _load_state()
     else:
         raise SystemExit("unknown incident kind " + kind)
     state["active"].append(name)
@@ -120,8 +146,16 @@ def reset():
             # NOT "--cpus 0": on Docker 29 that leaves the old limit in place (checkout stayed starved at 0.03 cores
             # for an hour and kept crashing). Setting the limit to every core of the Docker VM removes it in effect.
             _docker("update", "--cpus", _vm_cpus(), incident["container"])
+        if incident["kind"] == "pause":
+            _docker("unpause", incident["container"])
+        if incident["kind"] == "network_disconnect":
+            # reconnect with the service alias, so the other services can resolve its name again
+            _docker("network", "connect", "--alias", incident["container"], DEMO_NETWORK, incident["container"])
+    for container, (memory, swap) in state.get("original_memory", {}).items():
+        _docker("update", "--memory", memory, "--memory-swap", swap, container)
+        _docker("start", container)  # in case the OOM killer stopped it for good
     _save_state({"active": []})
-    print("reset: all flags off, containers started, CPU limits removed")
+    print("reset: all flags off, containers started/unpaused/reconnected, CPU and memory limits restored")
 
 
 def main():

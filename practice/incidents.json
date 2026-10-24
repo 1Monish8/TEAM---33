@@ -2,64 +2,255 @@
   "_note": "STAND-IN practice set. Replace with the organisers' faultctl incident list at kickoff. The agent never reads this file; only faultctl.py and run_all.py (scoring) do.",
   "incidents": {
     "payment-failure": {
-      "kind": "flag", "flag": "paymentFailure", "variant": "100%",
+      "kind": "flag",
+      "flag": "paymentFailure",
+      "variant": "100%",
       "alert": "Error rate above 5% on frontend checkout requests",
-      "expected_service": "payment", "accept": ["payment"]
+      "expected_service": "payment",
+      "accept": [
+        "payment"
+      ]
     },
     "cart-failure": {
-      "kind": "flag", "flag": "cartFailure", "variant": "50%",
+      "kind": "flag",
+      "flag": "cartFailure",
+      "variant": "50%",
       "alert": "Error rate elevated on frontend",
-      "expected_service": "cart", "accept": ["cart", "valkey-cart"]
+      "expected_service": "cart",
+      "accept": [
+        "cart",
+        "valkey-cart"
+      ]
     },
     "product-catalog-failure": {
-      "kind": "flag", "flag": "productCatalogFailure", "variant": "on",
+      "kind": "flag",
+      "flag": "productCatalogFailure",
+      "variant": "on",
       "alert": "Error rate elevated on frontend product pages",
-      "expected_service": "product-catalog", "accept": ["product-catalog"]
+      "expected_service": "product-catalog",
+      "accept": [
+        "product-catalog"
+      ]
     },
     "recommendation-cache-leak": {
-      "kind": "flag", "flag": "recommendationCacheFailure", "variant": "on",
+      "kind": "flag",
+      "flag": "recommendationCacheFailure",
+      "variant": "on",
       "alert": "Latency p95 above threshold on frontend",
-      "expected_service": "recommendation", "accept": ["recommendation"]
+      "expected_service": "recommendation",
+      "accept": [
+        "recommendation"
+      ]
     },
     "ad-high-cpu": {
-      "kind": "flag", "flag": "adHighCpu", "variant": "on",
+      "kind": "flag",
+      "flag": "adHighCpu",
+      "variant": "on",
       "alert": "Latency p95 above threshold on frontend",
-      "expected_service": "ad", "accept": ["ad"]
+      "expected_service": "ad",
+      "accept": [
+        "ad"
+      ]
     },
     "homepage-flood": {
-      "kind": "flag", "flag": "loadGeneratorFloodHomepage", "variant": "on",
+      "kind": "flag",
+      "flag": "loadGeneratorFloodHomepage",
+      "variant": "on",
       "alert": "Request rate and latency spiking on frontend-proxy",
-      "expected_service": "frontend", "accept": ["frontend", "frontend-proxy", "load-generator"]
+      "expected_service": "frontend",
+      "accept": [
+        "frontend",
+        "frontend-proxy",
+        "load-generator"
+      ]
     },
     "payment-unreachable": {
-      "kind": "flag", "flag": "paymentUnreachable", "variant": "on",
+      "kind": "flag",
+      "flag": "paymentUnreachable",
+      "variant": "on",
       "alert": "Checkout failures reported by users",
-      "expected_service": "payment", "accept": ["payment"]
+      "expected_service": "payment",
+      "accept": [
+        "payment"
+      ]
     },
     "kafka-queue-problems": {
-      "kind": "flag", "flag": "kafkaQueueProblems", "variant": "3sec",
+      "kind": "flag",
+      "flag": "kafkaQueueProblems",
+      "variant": "3sec",
       "alert": "Order processing delayed downstream of checkout",
-      "expected_service": "fraud-detection", "accept": ["fraud-detection", "kafka"]
+      "expected_service": "fraud-detection",
+      "accept": [
+        "fraud-detection",
+        "kafka"
+      ]
     },
     "currency-stopped": {
-      "kind": "docker_stop", "container": "currency",
+      "kind": "docker_stop",
+      "container": "currency",
       "alert": "Error rate elevated on frontend",
-      "expected_service": "currency", "accept": ["currency"]
+      "expected_service": "currency",
+      "accept": [
+        "currency"
+      ]
     },
     "cart-cache-down": {
-      "kind": "docker_stop", "container": "valkey-cart",
+      "kind": "docker_stop",
+      "container": "valkey-cart",
       "alert": "Error rate elevated on frontend cart operations",
-      "expected_service": "valkey-cart", "accept": ["valkey-cart"]
+      "expected_service": "valkey-cart",
+      "accept": [
+        "valkey-cart"
+      ]
     },
     "shipping-restart-loop": {
-      "kind": "restart_loop", "container": "shipping", "every_seconds": 20,
+      "kind": "restart_loop",
+      "container": "shipping",
+      "every_seconds": 20,
       "alert": "Intermittent checkout errors",
-      "expected_service": "shipping", "accept": ["shipping"]
+      "expected_service": "shipping",
+      "accept": [
+        "shipping"
+      ]
     },
     "checkout-cpu-starved": {
-      "kind": "cpu_starve", "container": "checkout", "cpus": "0.03",
+      "kind": "cpu_starve",
+      "container": "checkout",
+      "cpus": "0.03",
       "alert": "Latency p95 above threshold on checkout",
-      "expected_service": "checkout", "accept": ["checkout"]
+      "expected_service": "checkout",
+      "accept": [
+        "checkout"
+      ]
+    },
+    "kafka-consumer-dead": {
+      "kind": "flag",
+      "flag": "kafkaConsumerDead",
+      "variant": "on",
+      "priority": "P0 consumer failure",
+      "alert": "Orders are not being processed by fraud detection",
+      "expected_service": "fraud-detection",
+      "accept": [
+        "fraud-detection",
+        "kafka"
+      ]
+    },
+    "email-memory-leak": {
+      "kind": "flag",
+      "flag": "emailMemoryLeak",
+      "variant": "1000x",
+      "priority": "P0 memory exhaustion",
+      "alert": "Order confirmation emails delayed; checkout latency rising",
+      "expected_service": "email",
+      "accept": [
+        "email"
+      ]
+    },
+    "shipping-slow-dependency": {
+      "kind": "flag",
+      "flag": "intlShippingSlowdown",
+      "variant": "5sec",
+      "priority": "P0 slow dependency",
+      "alert": "Latency p95 above threshold on checkout",
+      "expected_service": "shipping",
+      "accept": [
+        "shipping",
+        "quote"
+      ]
+    },
+    "product-catalog-db-lock": {
+      "kind": "flag",
+      "flag": "productCatalogLockContention",
+      "variant": "on",
+      "priority": "P1 slow queries / lock contention",
+      "alert": "Product pages slow",
+      "expected_service": "product-catalog",
+      "accept": [
+        "product-catalog",
+        "astronomy-db"
+      ]
+    },
+    "ad-gc-pauses": {
+      "kind": "flag",
+      "flag": "adManualGc",
+      "variant": "on",
+      "priority": "P0 CPU / GC pressure",
+      "alert": "Latency p95 above threshold on frontend",
+      "expected_service": "ad",
+      "accept": [
+        "ad"
+      ]
+    },
+    "currency-frozen": {
+      "kind": "pause",
+      "container": "currency",
+      "priority": "P2 hung service / partition",
+      "alert": "Checkout requests timing out",
+      "expected_service": "currency",
+      "accept": [
+        "currency"
+      ]
+    },
+    "payment-network-partition": {
+      "kind": "network_disconnect",
+      "container": "payment",
+      "priority": "P1 network / DNS failure",
+      "alert": "Checkout failures reported by users",
+      "expected_service": "payment",
+      "accept": [
+        "payment"
+      ]
+    },
+    "recommendation-memory-starved": {
+      "kind": "memory_starve",
+      "container": "recommendation",
+      "memory": "200m",
+      "priority": "P0 memory exhaustion (infrastructure)",
+      "alert": "Recommendations intermittently failing on product pages",
+      "expected_service": "recommendation",
+      "accept": [
+        "recommendation"
+      ]
+    },
+    "simulate-deploy-payment": {
+      "kind": "restart_once",
+      "container": "payment",
+      "priority": "helper for deploy-then-payment-failure",
+      "alert": "(helper)",
+      "expected_service": "payment",
+      "accept": [
+        "payment"
+      ],
+      "helper": true
+    },
+    "deploy-then-payment-failure": {
+      "kind": "combo",
+      "parts": [
+        "simulate-deploy-payment",
+        "payment-failure"
+      ],
+      "pause_between_seconds": 20,
+      "priority": "P1 recent deployment",
+      "alert": "Error rate above 5% on frontend checkout requests",
+      "expected_service": "payment",
+      "accept": [
+        "payment"
+      ]
+    },
+    "multi-fault-payment-and-cache": {
+      "kind": "combo",
+      "parts": [
+        "payment-failure",
+        "cart-cache-down"
+      ],
+      "priority": "P2 multiple simultaneous faults",
+      "alert": "Errors on checkout and cart",
+      "expected_service": "payment",
+      "accept": [
+        "payment",
+        "valkey-cart"
+      ],
+      "expected_secondary": "valkey-cart"
     }
   }
 }
