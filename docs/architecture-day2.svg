@@ -1,0 +1,138 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1060" font-family="Helvetica, Arial, sans-serif" font-size="13">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#374151"/></marker>
+    <marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#b91c1c"/></marker>
+    <marker id="g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#047857"/></marker>
+    <style>
+      .b{fill:#fff;stroke:#374151;stroke-width:1.5}
+      .core{fill:#e8f0fe;stroke:#1a56db;stroke-width:2}
+      .tool{fill:#ecfdf5;stroke:#047857;stroke-width:1.5}
+      .data{fill:#f3f4f6;stroke:#6b7280;stroke-width:1.5}
+      .gate{fill:#fef3c7;stroke:#b45309;stroke-width:2}
+      .ok{fill:#dcfce7;stroke:#15803d;stroke-width:2}
+      .bad{fill:#fee2e2;stroke:#b91c1c;stroke-width:2}
+      .kill{fill:#fff1f2;stroke:#be123c;stroke-width:2;stroke-dasharray:6 3}
+      .t{font-weight:bold;font-size:14px}
+      .s{fill:#374151;font-size:12px}
+      .h{font-weight:bold;font-size:15px;fill:#111827}
+      .l{stroke:#374151;stroke-width:1.5;fill:none;marker-end:url(#a)}
+      .rl{stroke:#b91c1c;stroke-width:1.5;fill:none;marker-end:url(#r)}
+      .gl{stroke:#047857;stroke-width:1.5;fill:none;marker-end:url(#g)}
+      .lab{font-size:11px;fill:#374151}
+      .rlab{font-size:11px;fill:#b91c1c}
+      .glab{font-size:11px;fill:#047857}
+    </style>
+  </defs>
+  <text x="600" y="30" text-anchor="middle" font-size="21" font-weight="bold">TEAM-33 · AI on-call engineer · architecture (Day 2)</text>
+  <text x="600" y="52" text-anchor="middle" class="s">Nothing changes without a human yes. Nothing is called fixed without a before/after comparison.</text>
+
+  <!-- ===== left column: diagnosis (Day 1 engine) ===== -->
+  <text x="300" y="86" text-anchor="middle" class="h">Diagnose (agent.py · tools.py · llm.py)</text>
+  <rect class="b" x="60" y="98" width="480" height="52" rx="8"/>
+  <text class="t" x="300" y="119" text-anchor="middle">Alert in</text>
+  <text class="s" x="300" y="138" text-anchor="middle">CLI · --watch (detect from metrics) · diagnose() / handle_incident() for a harness</text>
+  <path class="l" d="M300,150 L300,170"/>
+
+  <rect class="core" x="60" y="170" width="480" height="108" rx="8"/>
+  <text class="t" x="300" y="192" text-anchor="middle">Tool-calling loop · Groq gpt-oss-120b (fallback gpt-oss-20b)</text>
+  <text class="s" x="300" y="211" text-anchor="middle">one tool per step, chosen from what the last one returned · ≤14 steps</text>
+  <text class="s" x="300" y="228" text-anchor="middle">errors → deepest failing span whose children did not fail (computed in code)</text>
+  <text class="s" x="300" y="245" text-anchor="middle">no errors → the service most CHANGED from its own baseline (deviation rank)</text>
+  <text class="s" x="300" y="262" text-anchor="middle">rate-limit pacing · history compaction · every call + model logged</text>
+  <path class="l" d="M300,278 L300,298"/>
+
+  <rect class="tool" x="60" y="298" width="480" height="92" rx="8"/>
+  <text class="t" x="300" y="319" text-anchor="middle">7 telemetry tools (pure Python, no LLM): every item gets a ref</text>
+  <text class="s" x="300" y="338" text-anchor="middle">get_service_health (ranked by deviation) · get_container_health (vs own baseline)</text>
+  <text class="s" x="300" y="355" text-anchor="middle">search_traces · get_trace · search_logs · get_deploy_history · list_services</text>
+  <text class="s" x="300" y="372" text-anchor="middle">flag text redacted · pipeline_warning if span metrics freeze</text>
+  <path class="l" d="M300,390 L300,410"/>
+
+  <rect class="data" x="60" y="410" width="480" height="52" rx="8"/>
+  <text class="t" x="300" y="431" text-anchor="middle">Prometheus · Jaeger v3 · OpenSearch · Docker engine</text>
+  <text class="s" x="300" y="450" text-anchor="middle">OpenTelemetry Demo (full mode) · flagd / Flag UI are never READ</text>
+
+  <rect class="gate" x="60" y="490" width="480" height="104" rx="8"/>
+  <text class="t" x="300" y="512" text-anchor="middle">submit_diagnosis guard (code, not prompt)</text>
+  <text class="s" x="300" y="531" text-anchor="middle">evidence registry: a ref no tool returned is REJECTED (demo: --demo-hallucination)</text>
+  <text class="s" x="300" y="548" text-anchor="middle">high needs ≥2 evidence kinds, current (≤10 min), among the most-changed services</text>
+  <text class="s" x="300" y="565" text-anchor="middle">escalation capped low · jsonschema-valid · budget out → honest auto-escalation</text>
+  <text class="s" x="300" y="582" text-anchor="middle">→ diagnosis.json + report.md + transcript.jsonl</text>
+  <path class="l" d="M540,542 L620,542 L620,127 L660,127"/>
+
+  <!-- ===== right column: act and verify ===== -->
+  <text x="900" y="86" text-anchor="middle" class="h">Act safely (agent.py · actions.py · verify.py)</text>
+  <rect class="gate" x="660" y="98" width="480" height="58" rx="8"/>
+  <text class="t" x="900" y="120" text-anchor="middle">GATE 1 · reviewer tries to DISPROVE it</text>
+  <text class="s" x="900" y="140" text-anchor="middle">second LLM call sees evidence + deviation rank · DISPUTED → confidence ≤ 0.60</text>
+  <path class="l" d="M900,156 L900,176"/>
+
+  <polygon class="b" points="900,176 1010,206 900,236 790,206"/>
+  <text class="t" x="900" y="203" text-anchor="middle">diagnosed and</text>
+  <text class="t" x="900" y="219" text-anchor="middle">confidence ≥ 0.5?</text>
+  <path class="rl" d="M1010,206 L1105,206 L1105,262"/><text class="rlab" x="1020" y="198">no</text>
+  <rect class="bad" x="1040" y="262" width="140" height="46" rx="8"/>
+  <text class="s" x="1110" y="282" text-anchor="middle">escalate to a</text>
+  <text class="s" x="1110" y="298" text-anchor="middle">human, no action</text>
+  <path class="l" d="M900,236 L900,262"/><text class="lab" x="908" y="254">yes</text>
+
+  <rect class="b" x="700" y="262" width="320" height="52" rx="8"/>
+  <text class="t" x="860" y="283" text-anchor="middle">Dry run: actions.describe()</text>
+  <text class="s" x="860" y="302" text-anchor="middle">command · effect · undo: nothing has changed yet</text>
+  <path class="l" d="M860,314 L860,334"/>
+
+  <rect class="gate" x="700" y="334" width="320" height="58" rx="8"/>
+  <text class="t" x="860" y="356" text-anchor="middle">GATE 2 · human types y</text>
+  <text class="s" x="860" y="376" text-anchor="middle">approve? [y/N] · no terminal = NO · approver logged</text>
+  <path class="rl" d="M1020,363 L1110,363 L1110,308"/><text class="rlab" x="1030" y="355">N</text>
+  <path class="l" d="M860,392 L860,412"/>
+
+  <rect class="gate" x="700" y="412" width="320" height="92" rx="8"/>
+  <text class="t" x="860" y="434" text-anchor="middle">GATE 3 · allowlist (actions.py)</text>
+  <text class="s" x="860" y="453" text-anchor="middle">restart_service · toggle_feature_flag (write-only)</text>
+  <text class="s" x="860" y="470" text-anchor="middle">throttle_load · scale_service → refused (Compose)</text>
+  <text class="s" x="860" y="487" text-anchor="middle">infra protected · every call → action_log.jsonl</text>
+  <path class="l" d="M860,504 L860,524"/>
+
+  <rect class="core" x="700" y="524" width="320" height="72" rx="8"/>
+  <text class="t" x="860" y="546" text-anchor="middle">verify.py</text>
+  <text class="s" x="860" y="565" text-anchor="middle">snapshot BEFORE · wait 120 s · fresh 2-min window</text>
+  <text class="s" x="860" y="582" text-anchor="middle">deviation before → after · one re-check · None = cannot tell</text>
+  <path class="l" d="M860,596 L860,616"/>
+
+  <polygon class="b" points="860,616 950,646 860,676 770,646"/>
+  <text class="t" x="860" y="651" text-anchor="middle">recovered?</text>
+  <path class="gl" d="M770,646 L760,646 L760,700"/><text class="glab" x="700" y="640">yes</text>
+  <path class="rl" d="M950,646 L1020,646 L1020,700"/><text class="rlab" x="958" y="640">no / cannot tell</text>
+  <rect class="ok" x="660" y="700" width="200" height="58" rx="8"/>
+  <text class="t" x="760" y="723" text-anchor="middle">Recovered, verified</text>
+  <text class="s" x="760" y="742" text-anchor="middle">report + action log</text>
+  <rect class="bad" x="900" y="700" width="240" height="58" rx="8"/>
+  <text class="t" x="1020" y="723" text-anchor="middle">Roll back, then escalate</text>
+  <text class="s" x="1020" y="742" text-anchor="middle">inverse action (e.g. restore load)</text>
+
+  <rect class="kill" x="1040" y="400" width="140" height="196" rx="8"/>
+  <text class="t" x="1110" y="424" text-anchor="middle" fill="#be123c">GATE 4</text>
+  <text class="t" x="1110" y="442" text-anchor="middle" fill="#be123c">KILL_SWITCH</text>
+  <text class="s" x="1110" y="466" text-anchor="middle">checked at every</text>
+  <text class="s" x="1110" y="482" text-anchor="middle">investigation step,</text>
+  <text class="s" x="1110" y="498" text-anchor="middle">before acting,</text>
+  <text class="s" x="1110" y="514" text-anchor="middle">inside every</text>
+  <text class="s" x="1110" y="530" text-anchor="middle">actions.execute,</text>
+  <text class="s" x="1110" y="546" text-anchor="middle">and each second of</text>
+  <text class="s" x="1110" y="562" text-anchor="middle">the verification wait</text>
+
+  <!-- ===== bottom: statements ===== -->
+  <rect class="b" x="60" y="790" width="1080" height="118" rx="10"/>
+  <text class="t" x="600" y="814" text-anchor="middle">Design statements</text>
+  <text class="s" x="80" y="838">• Flags: the diagnosis path CANNOT read feature flags (no tool touches flagd or the Flag UI; feature_flag text is redacted). The action path can only WRITE one,</text>
+  <text class="s" x="92" y="855">and only with a flag name the human supplies at approval. No code reads a flag to decide anything.</text>
+  <text class="s" x="80" y="876">• Honesty: escalation is a first-class outcome; confidence is capped in code; "cannot tell" is reported as None, never as success; scale_service is refused, not faked.</text>
+  <text class="s" x="80" y="897">• Evidence: the report embeds the registry's copy of each cited item, so an invented trace ID, log line or metric cannot reach the output.</text>
+
+  <rect class="data" x="60" y="928" width="1080" height="98" rx="10"/>
+  <text class="t" x="600" y="952" text-anchor="middle">Operator tooling (never callable by the agent)</text>
+  <text class="s" x="600" y="974" text-anchor="middle">check_stack.py pre-flight (data sources fresh; --fix restarts a frozen collector) · practice/faultctl.py stand-in injector · run_all.py sweep (diagnosis only)</text>
+  <text class="s" x="600" y="994" text-anchor="middle">calibration.py: stated confidence vs actual accuracy across sweeps · demo.sh: Checkpoint 3 live run · tests/test_offline.py: 20 tests, no stack, no LLM</text>
+  <text class="s" x="600" y="1014" text-anchor="middle">--yes auto-approves for unattended runs only, and is recorded as such in the report and the action log</text>
+</svg>

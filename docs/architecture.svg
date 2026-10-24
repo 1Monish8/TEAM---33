@@ -1,138 +1,364 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1060" font-family="Helvetica, Arial, sans-serif" font-size="13">
-  <defs>
-    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#374151"/></marker>
-    <marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#b91c1c"/></marker>
-    <marker id="g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#047857"/></marker>
-    <style>
-      .b{fill:#fff;stroke:#374151;stroke-width:1.5}
-      .core{fill:#e8f0fe;stroke:#1a56db;stroke-width:2}
-      .tool{fill:#ecfdf5;stroke:#047857;stroke-width:1.5}
-      .data{fill:#f3f4f6;stroke:#6b7280;stroke-width:1.5}
-      .gate{fill:#fef3c7;stroke:#b45309;stroke-width:2}
-      .ok{fill:#dcfce7;stroke:#15803d;stroke-width:2}
-      .bad{fill:#fee2e2;stroke:#b91c1c;stroke-width:2}
-      .kill{fill:#fff1f2;stroke:#be123c;stroke-width:2;stroke-dasharray:6 3}
-      .t{font-weight:bold;font-size:14px}
-      .s{fill:#374151;font-size:12px}
-      .h{font-weight:bold;font-size:15px;fill:#111827}
-      .l{stroke:#374151;stroke-width:1.5;fill:none;marker-end:url(#a)}
-      .rl{stroke:#b91c1c;stroke-width:1.5;fill:none;marker-end:url(#r)}
-      .gl{stroke:#047857;stroke-width:1.5;fill:none;marker-end:url(#g)}
-      .lab{font-size:11px;fill:#374151}
-      .rlab{font-size:11px;fill:#b91c1c}
-      .glab{font-size:11px;fill:#047857}
-    </style>
-  </defs>
-  <text x="600" y="30" text-anchor="middle" font-size="21" font-weight="bold">TEAM-33 · AI on-call engineer · architecture (Day 2)</text>
-  <text x="600" y="52" text-anchor="middle" class="s">Nothing changes without a human yes. Nothing is called fixed without a before/after comparison.</text>
-
-  <!-- ===== left column: diagnosis (Day 1 engine) ===== -->
-  <text x="300" y="86" text-anchor="middle" class="h">Diagnose (agent.py · tools.py · llm.py)</text>
-  <rect class="b" x="60" y="98" width="480" height="52" rx="8"/>
-  <text class="t" x="300" y="119" text-anchor="middle">Alert in</text>
-  <text class="s" x="300" y="138" text-anchor="middle">CLI · --watch (detect from metrics) · diagnose() / handle_incident() for a harness</text>
-  <path class="l" d="M300,150 L300,170"/>
-
-  <rect class="core" x="60" y="170" width="480" height="108" rx="8"/>
-  <text class="t" x="300" y="192" text-anchor="middle">Tool-calling loop · Groq gpt-oss-120b (fallback gpt-oss-20b)</text>
-  <text class="s" x="300" y="211" text-anchor="middle">one tool per step, chosen from what the last one returned · ≤14 steps</text>
-  <text class="s" x="300" y="228" text-anchor="middle">errors → deepest failing span whose children did not fail (computed in code)</text>
-  <text class="s" x="300" y="245" text-anchor="middle">no errors → the service most CHANGED from its own baseline (deviation rank)</text>
-  <text class="s" x="300" y="262" text-anchor="middle">rate-limit pacing · history compaction · every call + model logged</text>
-  <path class="l" d="M300,278 L300,298"/>
-
-  <rect class="tool" x="60" y="298" width="480" height="92" rx="8"/>
-  <text class="t" x="300" y="319" text-anchor="middle">7 telemetry tools (pure Python, no LLM): every item gets a ref</text>
-  <text class="s" x="300" y="338" text-anchor="middle">get_service_health (ranked by deviation) · get_container_health (vs own baseline)</text>
-  <text class="s" x="300" y="355" text-anchor="middle">search_traces · get_trace · search_logs · get_deploy_history · list_services</text>
-  <text class="s" x="300" y="372" text-anchor="middle">flag text redacted · pipeline_warning if span metrics freeze</text>
-  <path class="l" d="M300,390 L300,410"/>
-
-  <rect class="data" x="60" y="410" width="480" height="52" rx="8"/>
-  <text class="t" x="300" y="431" text-anchor="middle">Prometheus · Jaeger v3 · OpenSearch · Docker engine</text>
-  <text class="s" x="300" y="450" text-anchor="middle">OpenTelemetry Demo (full mode) · flagd / Flag UI are never READ</text>
-
-  <rect class="gate" x="60" y="490" width="480" height="104" rx="8"/>
-  <text class="t" x="300" y="512" text-anchor="middle">submit_diagnosis guard (code, not prompt)</text>
-  <text class="s" x="300" y="531" text-anchor="middle">evidence registry: a ref no tool returned is REJECTED (demo: --demo-hallucination)</text>
-  <text class="s" x="300" y="548" text-anchor="middle">high needs ≥2 evidence kinds, current (≤10 min), among the most-changed services</text>
-  <text class="s" x="300" y="565" text-anchor="middle">escalation capped low · jsonschema-valid · budget out → honest auto-escalation</text>
-  <text class="s" x="300" y="582" text-anchor="middle">→ diagnosis.json + report.md + transcript.jsonl</text>
-  <path class="l" d="M540,542 L620,542 L620,127 L660,127"/>
-
-  <!-- ===== right column: act and verify ===== -->
-  <text x="900" y="86" text-anchor="middle" class="h">Act safely (agent.py · actions.py · verify.py)</text>
-  <rect class="gate" x="660" y="98" width="480" height="58" rx="8"/>
-  <text class="t" x="900" y="120" text-anchor="middle">GATE 1 · reviewer tries to DISPROVE it</text>
-  <text class="s" x="900" y="140" text-anchor="middle">second LLM call sees evidence + deviation rank · DISPUTED → confidence ≤ 0.60</text>
-  <path class="l" d="M900,156 L900,176"/>
-
-  <polygon class="b" points="900,176 1010,206 900,236 790,206"/>
-  <text class="t" x="900" y="203" text-anchor="middle">diagnosed and</text>
-  <text class="t" x="900" y="219" text-anchor="middle">confidence ≥ 0.5?</text>
-  <path class="rl" d="M1010,206 L1105,206 L1105,262"/><text class="rlab" x="1020" y="198">no</text>
-  <rect class="bad" x="1040" y="262" width="140" height="46" rx="8"/>
-  <text class="s" x="1110" y="282" text-anchor="middle">escalate to a</text>
-  <text class="s" x="1110" y="298" text-anchor="middle">human, no action</text>
-  <path class="l" d="M900,236 L900,262"/><text class="lab" x="908" y="254">yes</text>
-
-  <rect class="b" x="700" y="262" width="320" height="52" rx="8"/>
-  <text class="t" x="860" y="283" text-anchor="middle">Dry run: actions.describe()</text>
-  <text class="s" x="860" y="302" text-anchor="middle">command · effect · undo: nothing has changed yet</text>
-  <path class="l" d="M860,314 L860,334"/>
-
-  <rect class="gate" x="700" y="334" width="320" height="58" rx="8"/>
-  <text class="t" x="860" y="356" text-anchor="middle">GATE 2 · human types y</text>
-  <text class="s" x="860" y="376" text-anchor="middle">approve? [y/N] · no terminal = NO · approver logged</text>
-  <path class="rl" d="M1020,363 L1110,363 L1110,308"/><text class="rlab" x="1030" y="355">N</text>
-  <path class="l" d="M860,392 L860,412"/>
-
-  <rect class="gate" x="700" y="412" width="320" height="92" rx="8"/>
-  <text class="t" x="860" y="434" text-anchor="middle">GATE 3 · allowlist (actions.py)</text>
-  <text class="s" x="860" y="453" text-anchor="middle">restart_service · toggle_feature_flag (write-only)</text>
-  <text class="s" x="860" y="470" text-anchor="middle">throttle_load · scale_service → refused (Compose)</text>
-  <text class="s" x="860" y="487" text-anchor="middle">infra protected · every call → action_log.jsonl</text>
-  <path class="l" d="M860,504 L860,524"/>
-
-  <rect class="core" x="700" y="524" width="320" height="72" rx="8"/>
-  <text class="t" x="860" y="546" text-anchor="middle">verify.py</text>
-  <text class="s" x="860" y="565" text-anchor="middle">snapshot BEFORE · wait 120 s · fresh 2-min window</text>
-  <text class="s" x="860" y="582" text-anchor="middle">deviation before → after · one re-check · None = cannot tell</text>
-  <path class="l" d="M860,596 L860,616"/>
-
-  <polygon class="b" points="860,616 950,646 860,676 770,646"/>
-  <text class="t" x="860" y="651" text-anchor="middle">recovered?</text>
-  <path class="gl" d="M770,646 L760,646 L760,700"/><text class="glab" x="700" y="640">yes</text>
-  <path class="rl" d="M950,646 L1020,646 L1020,700"/><text class="rlab" x="958" y="640">no / cannot tell</text>
-  <rect class="ok" x="660" y="700" width="200" height="58" rx="8"/>
-  <text class="t" x="760" y="723" text-anchor="middle">Recovered, verified</text>
-  <text class="s" x="760" y="742" text-anchor="middle">report + action log</text>
-  <rect class="bad" x="900" y="700" width="240" height="58" rx="8"/>
-  <text class="t" x="1020" y="723" text-anchor="middle">Roll back, then escalate</text>
-  <text class="s" x="1020" y="742" text-anchor="middle">inverse action (e.g. restore load)</text>
-
-  <rect class="kill" x="1040" y="400" width="140" height="196" rx="8"/>
-  <text class="t" x="1110" y="424" text-anchor="middle" fill="#be123c">GATE 4</text>
-  <text class="t" x="1110" y="442" text-anchor="middle" fill="#be123c">KILL_SWITCH</text>
-  <text class="s" x="1110" y="466" text-anchor="middle">checked at every</text>
-  <text class="s" x="1110" y="482" text-anchor="middle">investigation step,</text>
-  <text class="s" x="1110" y="498" text-anchor="middle">before acting,</text>
-  <text class="s" x="1110" y="514" text-anchor="middle">inside every</text>
-  <text class="s" x="1110" y="530" text-anchor="middle">actions.execute,</text>
-  <text class="s" x="1110" y="546" text-anchor="middle">and each second of</text>
-  <text class="s" x="1110" y="562" text-anchor="middle">the verification wait</text>
-
-  <!-- ===== bottom: statements ===== -->
-  <rect class="b" x="60" y="790" width="1080" height="118" rx="10"/>
-  <text class="t" x="600" y="814" text-anchor="middle">Design statements</text>
-  <text class="s" x="80" y="838">• Flags: the diagnosis path CANNOT read feature flags (no tool touches flagd or the Flag UI; feature_flag text is redacted). The action path can only WRITE one,</text>
-  <text class="s" x="92" y="855">and only with a flag name the human supplies at approval. No code reads a flag to decide anything.</text>
-  <text class="s" x="80" y="876">• Honesty: escalation is a first-class outcome; confidence is capped in code; "cannot tell" is reported as None, never as success; scale_service is refused, not faked.</text>
-  <text class="s" x="80" y="897">• Evidence: the report embeds the registry's copy of each cited item, so an invented trace ID, log line or metric cannot reach the output.</text>
-
-  <rect class="data" x="60" y="928" width="1080" height="98" rx="10"/>
-  <text class="t" x="600" y="952" text-anchor="middle">Operator tooling (never callable by the agent)</text>
-  <text class="s" x="600" y="974" text-anchor="middle">check_stack.py pre-flight (data sources fresh; --fix restarts a frozen collector) · practice/faultctl.py stand-in injector · run_all.py sweep (diagnosis only)</text>
-  <text class="s" x="600" y="994" text-anchor="middle">calibration.py: stated confidence vs actual accuracy across sweeps · demo.sh: Checkpoint 3 live run · tests/test_offline.py: 20 tests, no stack, no LLM</text>
-  <text class="s" x="600" y="1014" text-anchor="middle">--yes auto-approves for unattended runs only, and is recorded as such in the report and the action log</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1840 1250" width="1840" height="1250">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f8fafc"/><stop offset="1" stop-color="#eef2f7"/></linearGradient>
+<linearGradient id="title" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#0f172a"/><stop offset="1" stop-color="#1e3a8a"/></linearGradient>
+<filter id="sh" x="-5%" y="-5%" width="110%" height="115%"><feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#0f172a" flood-opacity="0.10"/></filter>
+<marker id="a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#475569"/></marker>
+<marker id="r" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e03131"/></marker>
+<marker id="g" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2f9e44"/></marker>
+<marker id="v" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7048e8"/></marker>
+<marker id="o" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e8590c"/></marker>
+<marker id="b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3b5bdb"/></marker>
+<marker id="t" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0c8599"/></marker>
+</defs>
+<rect x="0" y="0" width="1840" height="1250" rx="0" fill="url(#bg)" stroke="none" stroke-width="0" />
+<rect x="24" y="20" width="1792" height="76" rx="18" fill="url(#title)" stroke="none" stroke-width="0" filter="url(#sh)"/>
+<text x="52" y="56" font-size="27" fill="#ffffff" font-weight="800" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">Incident Zero · AI On-Call Engineer</text>
+<text x="52" y="81" font-size="14" fill="#c7d2fe" font-weight="500" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">TEAM-33 · complete architecture: from a broken shop to a verified, human-approved fix</text>
+<rect x="1180" y="40" width="196" height="36" rx="18" fill="#ffffff14" stroke="#a5b4fc" stroke-width="1.4" />
+<text x="1278" y="63" font-size="13.5" fill="#a5b4fc" font-weight="700" text-anchor="middle" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">1  Evidence or nothing</text>
+<rect x="1390" y="40" width="196" height="36" rx="18" fill="#ffffff14" stroke="#fcd34d" stroke-width="1.4" />
+<text x="1488" y="63" font-size="13.5" fill="#fcd34d" font-weight="700" text-anchor="middle" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">2  Honest confidence</text>
+<rect x="1600" y="40" width="196" height="36" rx="18" fill="#ffffff14" stroke="#86efac" stroke-width="1.4" />
+<text x="1698" y="63" font-size="13.5" fill="#86efac" font-weight="700" text-anchor="middle" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">3  Safe hands</text>
+<g filter="url(#sh)">
+<rect x="24" y="118" width="372" height="800" rx="20" fill="#eef3ff" stroke="#3b5bdb" stroke-width="1.6" />
+<rect x="24" y="118" width="372" height="62" rx="20" fill="#3b5bdb" stroke="#3b5bdb" stroke-width="0" />
+<rect x="24" y="158" width="372" height="22" rx="0" fill="#3b5bdb" stroke="#3b5bdb" stroke-width="0" />
+<circle cx="54" cy="149" r="15" fill="#ffffff" opacity="0.95"/>
+<text x="54" y="154" font-size="15" fill="#3b5bdb" font-weight="800" text-anchor="middle" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">1</text>
+<text x="78" y="146" font-size="16.5" fill="#ffffff" font-weight="750" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">THE SHOP</text>
+<text x="78" y="166" font-size="11.5" fill="#ffffffdd" font-weight="500" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">OpenTelemetry Demo · Docker Compose · 28 containers</text>
+</g>
+<g filter="url(#sh)">
+<rect x="418" y="118" width="232" height="800" rx="20" fill="#e8f9fb" stroke="#0c8599" stroke-width="1.6" />
+<rect x="418" y="118" width="232" height="62" rx="20" fill="#0c8599" stroke="#0c8599" stroke-width="0" />
+<rect x="418" y="158" width="232" height="22" rx="0" fill="#0c8599" stroke="#0c8599" stroke-width="0" />
+<circle cx="448" cy="149" r="15" fill="#ffffff" opacity="0.95"/>
+<text x="448" y="154" font-size="15" fill="#0c8599" font-weight="800" text-anchor="middle" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">2</text>
+<text x="472" y="146" font-size="16.5" fill="#ffffff" font-weight="750" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">TELEMETRY</text>
+<text x="472" y="166" font-size="11.5" fill="#ffffffdd" font-weight="500" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">metrics · traces · logs</text>
+</g>
+<g filter="url(#sh)">
+<rect x="672" y="118" width="364" height="800" rx="20" fill="#f4f1ff" stroke="#7048e8" stroke-width="1.6" />
+<rect x="672" y="118" width="364" height="62" rx="20" fill="#7048e8" stroke="#7048e8" stroke-width="0" />
+<rect x="672" y="158" width="364" height="22" rx="0" fill="#7048e8" stroke="#7048e8" stroke-width="0" />
+<circle cx="702" cy="149" r="15" fill="#ffffff" opacity="0.95"/>
+<text x="702" y="154" font-size="15" fill="#7048e8" font-weight="800" text-anchor="middle" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">3</text>
+<text x="726" y="146" font-size="16.5" fill="#ffffff" font-weight="750" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">THE EYES · tools.py</text>
+<text x="726" y="166" font-size="11.5" fill="#ffffffdd" font-weight="500" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">8 tools · no AI · all maths in code</text>
+</g>
+<g filter="url(#sh)">
+<rect x="1100" y="118" width="344" height="800" rx="20" fill="#fff5ec" stroke="#e8590c" stroke-width="1.6" />
+<rect x="1100" y="118" width="344" height="62" rx="20" fill="#e8590c" stroke="#e8590c" stroke-width="0" />
+<rect x="1100" y="158" width="344" height="22" rx="0" fill="#e8590c" stroke="#e8590c" stroke-width="0" />
+<circle cx="1130" cy="149" r="15" fill="#ffffff" opacity="0.95"/>
+<text x="1130" y="154" font-size="15" fill="#e8590c" font-weight="800" text-anchor="middle" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">4</text>
+<text x="1154" y="146" font-size="16.5" fill="#ffffff" font-weight="750" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">THE BRAIN · agent.py</text>
+<text x="1154" y="166" font-size="11.5" fill="#ffffffdd" font-weight="500" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">LLM investigation loop + trust checks</text>
+</g>
+<g filter="url(#sh)">
+<rect x="1466" y="118" width="350" height="800" rx="20" fill="#eefbf1" stroke="#2f9e44" stroke-width="1.6" />
+<rect x="1466" y="118" width="350" height="62" rx="20" fill="#2f9e44" stroke="#2f9e44" stroke-width="0" />
+<rect x="1466" y="158" width="350" height="22" rx="0" fill="#2f9e44" stroke="#2f9e44" stroke-width="0" />
+<circle cx="1496" cy="149" r="15" fill="#ffffff" opacity="0.95"/>
+<text x="1496" y="154" font-size="15" fill="#2f9e44" font-weight="800" text-anchor="middle" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">5</text>
+<text x="1520" y="146" font-size="16.5" fill="#ffffff" font-weight="750" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">THE HANDS · act &amp; verify</text>
+<text x="1520" y="166" font-size="11.5" fill="#ffffffdd" font-weight="500" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">actions.py · verify.py · 4 safety gates</text>
+</g>
+<text x="40" y="206" font-size="11" fill="#64748b" font-weight="700" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">REQUEST PATH</text>
+<rect x="40" y="216" width="116" height="24" rx="7" fill="#ffffff" stroke="#64748b99" stroke-width="1.1" />
+<text x="98" y="232" font-size="11" fill="#64748b" font-weight="600" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">load-generator</text>
+<rect x="176" y="216" width="116" height="24" rx="7" fill="#ffffff" stroke="#3b5bdb99" stroke-width="1.1" />
+<text x="234" y="232" font-size="11" fill="#3b5bdb" font-weight="600" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">frontend-proxy</text>
+<line x1="156" y1="228" x2="174" y2="228" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="176" y="256" width="116" height="24" rx="7" fill="#ffffff" stroke="#3b5bdb99" stroke-width="1.1" />
+<text x="234" y="272" font-size="11" fill="#3b5bdb" font-weight="700" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">frontend</text>
+<line x1="234" y1="240" x2="234" y2="255" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="308" y="236" width="70" height="24" rx="7" fill="#ffffff" stroke="#3b5bdb99" stroke-width="1.1" />
+<text x="343" y="252" font-size="11" fill="#3b5bdb" font-weight="600" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">ad</text>
+<rect x="308" y="266" width="70" height="24" rx="7" fill="#ffffff" stroke="#3b5bdb99" stroke-width="1.1" />
+<text x="343" y="282" font-size="11" fill="#3b5bdb" font-weight="600" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">recommend.</text>
+<line x1="292" y1="268" x2="306" y2="250" stroke="#94a3b8" stroke-width="1.2" marker-end="url(#a)"/>
+<line x1="292" y1="270" x2="306" y2="278" stroke="#94a3b8" stroke-width="1.2" marker-end="url(#a)"/>
+<rect x="176" y="296" width="116" height="24" rx="7" fill="#ffffff" stroke="#3b5bdb99" stroke-width="1.1" />
+<text x="234" y="312" font-size="11" fill="#3b5bdb" font-weight="700" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">checkout</text>
+<line x1="234" y1="280" x2="234" y2="295" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="40" y="340" width="106" height="24" rx="7" fill="#ffffff" stroke="#3b5bdb99" stroke-width="1.1" />
+<text x="93" y="356" font-size="11" fill="#3b5bdb" font-weight="600" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">cart</text>
+<rect x="154" y="340" width="106" height="24" rx="7" fill="#ffffff" stroke="#3b5bdb99" stroke-width="1.1" />
+<text x="207" y="356" font-size="11" fill="#3b5bdb" font-weight="600" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">product-catalog</text>
+<rect x="268" y="340" width="106" height="24" rx="7" fill="#ffffff" stroke="#3b5bdb99" stroke-width="1.1" />
+<text x="321" y="356" font-size="11" fill="#3b5bdb" font-weight="600" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">currency</text>
+<rect x="40" y="372" width="106" height="24" rx="7" fill="#ffffff" stroke="#3b5bdb99" stroke-width="1.1" />
+<text x="93" y="388" font-size="11" fill="#3b5bdb" font-weight="600" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">payment</text>
+<rect x="154" y="372" width="106" height="24" rx="7" fill="#ffffff" stroke="#3b5bdb99" stroke-width="1.1" />
+<text x="207" y="388" font-size="11" fill="#3b5bdb" font-weight="600" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">shipping</text>
+<rect x="268" y="372" width="106" height="24" rx="7" fill="#ffffff" stroke="#3b5bdb99" stroke-width="1.1" />
+<text x="321" y="388" font-size="11" fill="#3b5bdb" font-weight="600" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">email</text>
+<rect x="154" y="404" width="106" height="24" rx="7" fill="#ffffff" stroke="#3b5bdb99" stroke-width="1.1" />
+<text x="207" y="420" font-size="11" fill="#3b5bdb" font-weight="600" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">quote</text>
+<line x1="234" y1="320" x2="234" y2="338" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#a)"/>
+<text x="40" y="448" font-size="11" fill="#64748b" font-weight="700" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">QUEUE · BACKGROUND</text>
+<rect x="40" y="458" width="106" height="24" rx="7" fill="#e3fafc" stroke="#0b728599" stroke-width="1.1" />
+<text x="93" y="474" font-size="11" fill="#0b7285" font-weight="700" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">kafka</text>
+<rect x="154" y="458" width="106" height="24" rx="7" fill="#ffffff" stroke="#3b5bdb99" stroke-width="1.1" />
+<text x="207" y="474" font-size="11" fill="#3b5bdb" font-weight="600" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">accounting</text>
+<rect x="268" y="458" width="106" height="24" rx="7" fill="#ffffff" stroke="#3b5bdb99" stroke-width="1.1" />
+<text x="321" y="474" font-size="11" fill="#3b5bdb" font-weight="600" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">fraud-detect.</text>
+<line x1="146" y1="470" x2="152" y2="470" stroke="#94a3b8" stroke-width="1.2" marker-end="url(#a)"/>
+<text x="40" y="506" font-size="11" fill="#64748b" font-weight="700" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">DATA STORES</text>
+<rect x="40" y="516" width="106" height="24" rx="7" fill="#e3fafc" stroke="#0b728599" stroke-width="1.1" />
+<text x="93" y="532" font-size="11" fill="#0b7285" font-weight="700" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">valkey-cart</text>
+<rect x="154" y="516" width="106" height="24" rx="7" fill="#e3fafc" stroke="#0b728599" stroke-width="1.1" />
+<text x="207" y="532" font-size="11" fill="#0b7285" font-weight="700" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">astronomy-db</text>
+<rect x="268" y="516" width="106" height="24" rx="7" fill="#fff0f6" stroke="#c2255c99" stroke-width="1.1" />
+<text x="321" y="532" font-size="11" fill="#c2255c" font-weight="700" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">flagd (flags)</text>
+<text x="40" y="560" font-size="11" fill="#64748b" font-weight="500" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-style="italic">cache for cart · PostgreSQL · fault switches</text>
+<rect x="36" y="576" width="348" height="112" rx="12" fill="#fff5f5" stroke="#e0313166" stroke-width="1.2" stroke-dasharray="6 4" />
+<text x="50" y="598" font-size="13" fill="#e03131" font-weight="700" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">Faults are injected HERE</text>
+<text x="50" y="618" font-size="12" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">mentor / faultctl / practice/mentor.py:</text>
+<text x="50" y="635" font-size="12.5"><tspan fill="#c2255c" font-weight="700" font-family="'SF Mono', Menlo, Consolas, monospace">flags</tspan><tspan fill="#374151" font-weight="400" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif"> paymentFailure, adHighCpu, kafka…</tspan></text>
+<text x="50" y="652" font-size="12.5"><tspan fill="#c2255c" font-weight="700" font-family="'SF Mono', Menlo, Consolas, monospace">docker</tspan><tspan fill="#374151" font-weight="400" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif"> stop · pause · cpus · memory · network</tspan></text>
+<text x="50" y="669" font-size="12" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">the agent is never told which one</text>
+<rect x="36" y="700" width="348" height="74" rx="12" fill="#ffffff" stroke="#3b5bdb66" stroke-width="1.2" />
+<text x="50" y="722" font-size="13" fill="#3b5bdb" font-weight="700" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">Instrumented with OpenTelemetry</text>
+<text x="50" y="742" font-size="12" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">every service emits traces · metrics · logs</text>
+<text x="50" y="759" font-size="12" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">15 services, 7+ languages (Go, Java, .NET, Rust…)</text>
+<rect x="36" y="786" width="348" height="118" rx="12" fill="#f4fcf5" stroke="#2f9e4466" stroke-width="1.2" stroke-dasharray="6 4" />
+<text x="50" y="808" font-size="13" fill="#2f9e44" font-weight="700" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">Fixes land here (only after a human yes)</text>
+<text x="50" y="828" font-size="12.5"><tspan fill="#2f9e44" font-weight="700" font-family="'SF Mono', Menlo, Consolas, monospace">docker restart </tspan><tspan fill="#374151" font-weight="400" font-family="'SF Mono', Menlo, Consolas, monospace">&lt;service&gt;</tspan></text>
+<text x="50" y="845" font-size="12.5"><tspan fill="#2f9e44" font-weight="700" font-family="'SF Mono', Menlo, Consolas, monospace">write flag </tspan><tspan fill="#374151" font-weight="400" font-family="'SF Mono', Menlo, Consolas, monospace">&lt;name the human typed&gt;</tspan></text>
+<text x="50" y="862" font-size="12.5"><tspan fill="#2f9e44" font-weight="700" font-family="'SF Mono', Menlo, Consolas, monospace">throttle </tspan><tspan fill="#374151" font-weight="400" font-family="'SF Mono', Menlo, Consolas, monospace">load-generator users</tspan></text>
+<text x="50" y="879" font-size="12" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">never: observability, flagd, load-gen restart</text>
+<rect x="432" y="196" width="204" height="96" rx="12" fill="#ffffff" stroke="#0c859966" stroke-width="1.2" />
+<text x="446" y="218" font-size="13" fill="#0c8599" font-weight="700" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">OTel Collector</text>
+<text x="446" y="238" font-size="12" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">span metrics connector</text>
+<text x="446" y="255" font-size="12" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">docker_stats · kafka</text>
+<text x="446" y="272" font-size="12" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">postgresql · redis · host</text>
+<rect x="432" y="304" width="204" height="152" rx="12" fill="#ffffff" stroke="#0c859966" stroke-width="1.2" />
+<text x="446" y="326" font-size="13" fill="#0c8599" font-weight="700" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">Prometheus</text>
+<text x="446" y="346" font-size="12" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">span calls + latency</text>
+<text x="446" y="363" font-size="12" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">histograms</text>
+<text x="446" y="380" font-size="12" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">container CPU / memory</text>
+<text x="446" y="397" font-size="12" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">Kafka lag · group members</text>
+<text x="446" y="414" font-size="12" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">Postgres conns · deadlocks</text>
+<text x="446" y="431" font-size="12" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">Redis rejects · disk</text>
+<rect x="432" y="468" width="204" height="78" rx="12" fill="#ffffff" stroke="#0c859966" stroke-width="1.2" />
+<text x="446" y="490" font-size="13" fill="#0c8599" font-weight="700" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">Jaeger 2 · traces</text>
+<text x="446" y="510" font-size="12" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">v3 API · OTLP JSON</text>
+<text x="446" y="527" font-size="12" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">spans with parent/child</text>
+<rect x="432" y="558" width="204" height="78" rx="12" fill="#ffffff" stroke="#0c859966" stroke-width="1.2" />
+<text x="446" y="580" font-size="13" fill="#0c8599" font-weight="700" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">OpenSearch · logs</text>
+<text x="446" y="600" font-size="12" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">otel-logs-* indices</text>
+<text x="446" y="617" font-size="12" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">severity · traceId · body</text>
+<rect x="432" y="648" width="204" height="96" rx="12" fill="#ffffff" stroke="#0c859966" stroke-width="1.2" />
+<text x="446" y="670" font-size="13" fill="#0c8599" font-weight="700" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">Docker Engine</text>
+<text x="446" y="690" font-size="12" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">state · restarts · OOM</text>
+<text x="446" y="707" font-size="12" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">CPU / memory limits</text>
+<text x="446" y="724" font-size="12" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">networks · paused</text>
+<rect x="432" y="756" width="204" height="148" rx="12" fill="#fff0f6" stroke="#c2255c66" stroke-width="1.2" stroke-dasharray="5 4" />
+<text x="446" y="778" font-size="13" fill="#c2255c" font-weight="700" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">Never read for diagnosis</text>
+<text x="446" y="798" font-size="12.5"><tspan fill="#c2255c" font-weight="700" font-family="'SF Mono', Menlo, Consolas, monospace">flagd</tspan><tspan fill="#374151" font-weight="400" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif"> / Flag UI</tspan></text>
+<text x="446" y="815" font-size="12" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">feature-flag text in</text>
+<text x="446" y="832" font-size="12" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">telemetry is redacted</text>
+<text x="446" y="849" font-size="12" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">before the model sees it</text>
+<text x="446" y="866" font-size="12" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">(rule 6: no answer key)</text>
+<rect x="686" y="196" width="336" height="196" rx="12" fill="#ffffff" stroke="#7048e866" stroke-width="1.2" />
+<text x="700" y="218" font-size="13" fill="#7048e8" font-weight="700" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">8 tools the model can call</text>
+<text x="700" y="237" font-size="12.5"><tspan fill="#7048e8" font-weight="700" font-family="'SF Mono', Menlo, Consolas, monospace">get_service_health  </tspan><tspan fill="#374151" font-weight="400" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">vs its OWN 2-h normal</tspan></text>
+<text x="700" y="254" font-size="12.5"><tspan fill="#5f3dc4" font-weight="500" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">   → deviation_score ranking (top = suspect)</tspan></text>
+<text x="700" y="270" font-size="12.5"><tspan fill="#7048e8" font-weight="700" font-family="'SF Mono', Menlo, Consolas, monospace">get_container_health  </tspan><tspan fill="#374151" font-weight="400" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">stopped · OOM · restarts</tspan></text>
+<text x="700" y="287" font-size="12.5"><tspan fill="#5f3dc4" font-weight="500" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">   CPU_SPIKE · CPU_LIMITED · MEMORY_CLIMBING</tspan></text>
+<text x="700" y="303" font-size="12.5"><tspan fill="#7048e8" font-weight="700" font-family="'SF Mono', Menlo, Consolas, monospace">get_dependency_health  </tspan><tspan fill="#374151" font-weight="400" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">Kafka · DB · cache · disk</tspan></text>
+<text x="700" y="320" font-size="12.5"><tspan fill="#7048e8" font-weight="700" font-family="'SF Mono', Menlo, Consolas, monospace">search_traces · get_trace  </tspan><tspan fill="#374151" font-weight="400" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">deepest failing span</tspan></text>
+<text x="700" y="336" font-size="12.5"><tspan fill="#7048e8" font-weight="700" font-family="'SF Mono', Menlo, Consolas, monospace">search_logs  </tspan><tspan fill="#374151" font-weight="400" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">WARN+ lines + error signature</tspan></text>
+<text x="700" y="353" font-size="12.5"><tspan fill="#7048e8" font-weight="700" font-family="'SF Mono', Menlo, Consolas, monospace">get_deploy_history  </tspan><tspan fill="#374151" font-weight="400" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">what changed just before</tspan></text>
+<text x="700" y="369" font-size="12.5"><tspan fill="#7048e8" font-weight="700" font-family="'SF Mono', Menlo, Consolas, monospace">list_services  </tspan><tspan fill="#374151" font-weight="400" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">orientation</tspan></text>
+<rect x="686" y="404" width="336" height="132" rx="12" fill="#ffffff" stroke="#7048e866" stroke-width="1.2" />
+<text x="700" y="426" font-size="13" fill="#7048e8" font-weight="700" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">Computed in code, never guessed</text>
+<text x="700" y="445" font-size="12.5"><tspan fill="#7048e8" font-weight="700" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">deepest failing span</tspan><tspan fill="#374151" font-weight="400" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">: walk the span tree;</tspan></text>
+<text x="700" y="462" font-size="12" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">  the culprit's own children did not fail</text>
+<text x="700" y="478" font-size="12.5"><tspan fill="#7048e8" font-weight="700" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">twin rule</tspan><tspan fill="#374151" font-weight="400" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">: no errors → the service that</tspan></text>
+<text x="700" y="495" font-size="12" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">  moved most from its OWN normal</text>
+<text x="700" y="511" font-size="12.5"><tspan fill="#7048e8" font-weight="700" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">baselines</tspan><tspan fill="#374151" font-weight="400" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">: median of last 2 h, minus 10 min</tspan></text>
+<rect x="686" y="548" width="336" height="132" rx="12" fill="#ffffff" stroke="#7048e866" stroke-width="1.2" />
+<text x="700" y="570" font-size="13" fill="#7048e8" font-weight="700" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">Labels the model reads</text>
+<rect x="700" y="578" width="57" height="22" rx="11" fill="#f3f0ff" stroke="#7048e888" stroke-width="1" />
+<text x="728" y="593" font-size="11" fill="#7048e8" font-weight="650" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">ERRORS</text>
+<rect x="763" y="578" width="43" height="22" rx="11" fill="#f3f0ff" stroke="#7048e888" stroke-width="1" />
+<text x="784" y="593" font-size="11" fill="#7048e8" font-weight="650" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">SLOW</text>
+<rect x="812" y="578" width="78" height="22" rx="11" fill="#f3f0ff" stroke="#7048e888" stroke-width="1" />
+<text x="851" y="593" font-size="11" fill="#7048e8" font-weight="650" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">SLOWER 4x</text>
+<rect x="896" y="578" width="78" height="22" rx="11" fill="#f3f0ff" stroke="#7048e888" stroke-width="1" />
+<text x="935" y="593" font-size="11" fill="#7048e8" font-weight="650" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">SLOW_TAIL</text>
+<rect x="700" y="603" width="43" height="22" rx="11" fill="#f3f0ff" stroke="#7048e888" stroke-width="1" />
+<text x="721" y="618" font-size="11" fill="#7048e8" font-weight="650" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">DOWN</text>
+<rect x="749" y="603" width="43" height="22" rx="11" fill="#f3f0ff" stroke="#7048e888" stroke-width="1" />
+<text x="770" y="618" font-size="11" fill="#7048e8" font-weight="650" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">IDLE</text>
+<rect x="798" y="603" width="57" height="22" rx="11" fill="#f3f0ff" stroke="#7048e888" stroke-width="1" />
+<text x="826" y="618" font-size="11" fill="#7048e8" font-weight="650" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">PAUSED</text>
+<rect x="861" y="603" width="105" height="22" rx="11" fill="#f3f0ff" stroke="#7048e888" stroke-width="1" />
+<text x="913" y="618" font-size="11" fill="#7048e8" font-weight="650" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">TRAFFIC_SURGE</text>
+<rect x="700" y="628" width="98" height="22" rx="11" fill="#f3f0ff" stroke="#7048e888" stroke-width="1" />
+<text x="749" y="643" font-size="11" fill="#7048e8" font-weight="650" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">RETRY_STORM?</text>
+<rect x="804" y="628" width="105" height="22" rx="11" fill="#f3f0ff" stroke="#7048e888" stroke-width="1" />
+<text x="856" y="643" font-size="11" fill="#7048e8" font-weight="650" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">QUEUE_BACKLOG</text>
+<rect x="915" y="628" width="85" height="22" rx="11" fill="#f3f0ff" stroke="#7048e888" stroke-width="1" />
+<text x="957" y="643" font-size="11" fill="#7048e8" font-weight="650" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">CACHE_DOWN</text>
+<rect x="700" y="653" width="105" height="22" rx="11" fill="#f3f0ff" stroke="#7048e888" stroke-width="1" />
+<text x="752" y="668" font-size="11" fill="#7048e8" font-weight="650" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">TELEMETRY_GAP</text>
+<rect x="811" y="653" width="126" height="22" rx="11" fill="#f3f0ff" stroke="#7048e888" stroke-width="1" />
+<text x="874" y="668" font-size="11" fill="#7048e8" font-weight="650" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">pipeline_warning</text>
+<rect x="686" y="692" width="336" height="106" rx="12" fill="#ffffff" stroke="#7048e866" stroke-width="1.2" />
+<text x="700" y="714" font-size="13" fill="#7048e8" font-weight="700" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">Guards on the data</text>
+<text x="700" y="734" font-size="12.5"><tspan fill="#7048e8" font-weight="700" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">error signatures</tspan><tspan fill="#374151" font-weight="400" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">: dns · timeout · OOM · db pool</tspan></text>
+<text x="700" y="751" font-size="12.5"><tspan fill="#7048e8" font-weight="700" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">prompt injection</tspan><tspan fill="#374151" font-weight="400" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif"> in logs → redacted</tspan></text>
+<text x="700" y="768" font-size="12.5"><tspan fill="#7048e8" font-weight="700" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">clock skew</tspan><tspan fill="#374151" font-weight="400" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif"> warning · </tspan><tspan fill="#7048e8" font-weight="700" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">stale metrics</tspan><tspan fill="#374151" font-weight="400" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif"> warning</tspan></text>
+<text x="700" y="785" font-size="12.5"><tspan fill="#7048e8" font-weight="700" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">flag text</tspan><tspan fill="#374151" font-weight="400" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif"> → redacted (never seen by the model)</tspan></text>
+<rect x="686" y="810" width="336" height="94" rx="12" fill="#5f3dc4" stroke="#5f3dc4" stroke-width="0" />
+<text x="702" y="834" font-size="13" fill="#ffffff" font-weight="800" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">EVIDENCE REGISTRY</text>
+<text x="702" y="856" font-size="12" fill="#e5dbff" font-weight="500" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">every fact a tool returns gets an ID:</text>
+<rect x="702" y="868" width="71" height="22" rx="11" fill="#7950f2" stroke="#ffffff88" stroke-width="1" />
+<text x="737" y="883" font-size="11" fill="#ffffff" font-weight="650" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">metric-3</text>
+<rect x="781" y="868" width="64" height="22" rx="11" fill="#7950f2" stroke="#ffffff88" stroke-width="1" />
+<text x="813" y="883" font-size="11" fill="#ffffff" font-weight="650" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">trace-7</text>
+<rect x="853" y="868" width="57" height="22" rx="11" fill="#7950f2" stroke="#ffffff88" stroke-width="1" />
+<text x="881" y="883" font-size="11" fill="#ffffff" font-weight="650" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">log-12</text>
+<text x="922" y="884" font-size="11.5" fill="#e5dbff" font-weight="500" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-style="italic">citable refs</text>
+<rect x="1114" y="196" width="316" height="50" rx="12" fill="#fff4e6" stroke="#e8590c" stroke-width="1.6" />
+<text x="1128" y="217" font-size="11.5" fill="#e8590c" font-weight="800" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">ALERT IN</text>
+<text x="1128" y="236" font-size="13" fill="#7c2d12" font-weight="600" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-style="italic">"Checkout error rate is high"</text>
+<rect x="1114" y="258" width="316" height="116" rx="12" fill="#ffffff" stroke="#e8590c66" stroke-width="1.2" />
+<text x="1128" y="280" font-size="13" fill="#e8590c" font-weight="700" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">Tool-calling loop</text>
+<text x="1128" y="300" font-size="12" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">system prompt ≈ 2k tokens: map, steps, rules</text>
+<text x="1128" y="317" font-size="12.5"><tspan fill="#374151" font-weight="400" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">model picks </tspan><tspan fill="#e8590c" font-weight="700" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">ONE tool at a time</tspan></text>
+<text x="1128" y="334" font-size="12" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">next step depends on what it just learned</text>
+<text x="1128" y="351" font-size="12" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">4–8 calls · ~3–4 min · history compacted</text>
+<rect x="1114" y="386" width="316" height="118" rx="12" fill="#ffffff" stroke="#e8590c66" stroke-width="1.2" />
+<text x="1128" y="408" font-size="13" fill="#e8590c" font-weight="700" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">LLM · Groq (OpenAI-compatible API)</text>
+<text x="1128" y="428" font-size="12.5"><tspan fill="#e8590c" font-weight="700" font-family="'SF Mono', Menlo, Consolas, monospace">gpt-oss-120b</tspan><tspan fill="#374151" font-weight="400" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif"> primary</tspan></text>
+<text x="1128" y="445" font-size="12.5"><tspan fill="#374151" font-weight="400" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">daily cap → </tspan><tspan fill="#e8590c" font-weight="700" font-family="'SF Mono', Menlo, Consolas, monospace">backup key 120b</tspan><tspan fill="#374151" font-weight="400" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif"> → </tspan><tspan fill="#e8590c" font-weight="700" font-family="'SF Mono', Menlo, Consolas, monospace">20b</tspan></text>
+<text x="1128" y="462" font-size="12" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">pacing under 8k tokens/min · Retry-After</text>
+<text x="1128" y="479" font-size="12" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">bad tool call → fed back, run continues</text>
+<rect x="1114" y="516" width="316" height="50" rx="12" fill="#ffffff" stroke="#e8590c66" stroke-width="1.2" />
+<text x="1128" y="537" font-size="13" fill="#e8590c" font-weight="750" text-anchor="start" font-family="'SF Mono', Menlo, Consolas, monospace">submit_diagnosis</text>
+<text x="1128" y="556" font-size="11.5" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">root cause · refs · confidence · one action</text>
+<rect x="1114" y="578" width="316" height="326" rx="14" fill="#fff0f6" stroke="#d6336c" stroke-width="1.6" />
+<text x="1128" y="602" font-size="12.5" fill="#c2255c" font-weight="800" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">TRUST CHECKS · in code, after the answer</text>
+<circle cx="1136" cy="626" r="8" fill="#d6336c"/>
+<text x="1136" y="630" font-size="11" fill="#ffffff" font-weight="800" text-anchor="middle" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">✓</text>
+<text x="1152" y="630" font-size="12.5" fill="#a61e4d" font-weight="750" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">Evidence guard</text>
+<text x="1152" y="646" font-size="11.8" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">a ref no tool returned → REJECTED;</text>
+<text x="1152" y="661" font-size="11.8" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">model must resubmit (demo: trace-9999)</text>
+<circle cx="1136" cy="682" r="8" fill="#d6336c"/>
+<text x="1136" y="686" font-size="11" fill="#ffffff" font-weight="800" text-anchor="middle" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">✓</text>
+<text x="1152" y="686" font-size="12.5" fill="#a61e4d" font-weight="750" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">Fresh evidence only</text>
+<text x="1152" y="702" font-size="11.8" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">older than the incident window</text>
+<text x="1152" y="717" font-size="11.8" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">does not count toward confidence</text>
+<circle cx="1136" cy="738" r="8" fill="#d6336c"/>
+<text x="1136" y="742" font-size="11" fill="#ffffff" font-weight="800" text-anchor="middle" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">✓</text>
+<text x="1152" y="742" font-size="12.5" fill="#a61e4d" font-weight="750" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">Calibration</text>
+<text x="1152" y="758" font-size="11.8" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">high needs 2 evidence kinds + a</text>
+<text x="1152" y="773" font-size="11.8" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">top-ranked service · escalate ≤ 0.45</text>
+<circle cx="1136" cy="794" r="8" fill="#d6336c"/>
+<text x="1136" y="798" font-size="11" fill="#ffffff" font-weight="800" text-anchor="middle" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">✓</text>
+<text x="1152" y="798" font-size="12.5" fill="#a61e4d" font-weight="750" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">Consistency</text>
+<text x="1152" y="814" font-size="11.8" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">a stopped / crashed container must</text>
+<text x="1152" y="829" font-size="11.8" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">be named or explained away</text>
+<circle cx="1136" cy="850" r="8" fill="#d6336c"/>
+<text x="1136" y="854" font-size="11" fill="#ffffff" font-weight="800" text-anchor="middle" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">✓</text>
+<text x="1152" y="854" font-size="12.5" fill="#a61e4d" font-weight="750" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">Reviewer LLM</text>
+<text x="1152" y="870" font-size="11.8" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">a second call tries to DISPROVE it;</text>
+<text x="1152" y="885" font-size="11.8" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">a grounded dispute caps it at 0.60</text>
+<rect x="1480" y="196" width="322" height="56" rx="11" fill="#fff9db" stroke="#f08c00" stroke-width="1.5" />
+<text x="1494" y="219" font-size="13" fill="#f08c00" font-weight="750" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">Confident? (≥ 0.50)</text>
+<text x="1494" y="238" font-size="11.5" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">no → escalate to a human, no action</text>
+<line x1="1641" y1="252" x2="1641" y2="266" stroke="#475569" stroke-width="1.8" marker-end="url(#a)"/>
+<rect x="1480" y="268" width="322" height="56" rx="11" fill="#ffffff" stroke="#2f9e44" stroke-width="1.5" />
+<text x="1494" y="291" font-size="13" fill="#2f9e44" font-weight="750" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">Dry run</text>
+<text x="1494" y="310" font-size="11.5" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">exactly what would change + undo</text>
+<line x1="1641" y1="324" x2="1641" y2="338" stroke="#475569" stroke-width="1.8" marker-end="url(#a)"/>
+<rect x="1480" y="340" width="322" height="56" rx="11" fill="#e7f5ff" stroke="#1c7ed6" stroke-width="1.5" />
+<text x="1494" y="363" font-size="13" fill="#1c7ed6" font-weight="750" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">GATE · human types y</text>
+<text x="1494" y="382" font-size="11.5" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">n / no answer → nothing changes</text>
+<line x1="1641" y1="396" x2="1641" y2="410" stroke="#475569" stroke-width="1.8" marker-end="url(#a)"/>
+<rect x="1480" y="412" width="322" height="56" rx="11" fill="#e7f5ff" stroke="#1c7ed6" stroke-width="1.5" />
+<text x="1494" y="435" font-size="13" fill="#1c7ed6" font-weight="750" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">GATE · allowlist (actions.py)</text>
+<text x="1494" y="454" font-size="11.5" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">restart · write flag · throttle load</text>
+<line x1="1641" y1="468" x2="1641" y2="482" stroke="#475569" stroke-width="1.8" marker-end="url(#a)"/>
+<rect x="1480" y="484" width="322" height="56" rx="11" fill="#ffffff" stroke="#2f9e44" stroke-width="1.5" />
+<text x="1494" y="507" font-size="13" fill="#2f9e44" font-weight="750" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">Execute + log</text>
+<text x="1494" y="526" font-size="11.5" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">every attempt → action_log.jsonl</text>
+<line x1="1641" y1="540" x2="1641" y2="554" stroke="#475569" stroke-width="1.8" marker-end="url(#a)"/>
+<rect x="1480" y="556" width="322" height="56" rx="11" fill="#ffffff" stroke="#2f9e44" stroke-width="1.5" />
+<text x="1494" y="579" font-size="13" fill="#2f9e44" font-weight="750" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">Verify (verify.py)</text>
+<text x="1494" y="598" font-size="11.5" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">snapshot before → wait 120 s → compare</text>
+<polygon points="1641,630 1715,656 1641,682 1567,656" fill="#ffffff" stroke="#2f9e44" stroke-width="1.6"/>
+<text x="1641" y="661" font-size="12.5" fill="#2f9e44" font-weight="750" text-anchor="middle" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">Recovered?</text>
+<line x1="1641" y1="616" x2="1641" y2="629" stroke="#475569" stroke-width="1.8" marker-end="url(#a)"/>
+<rect x="1480" y="700" width="151" height="52" rx="11" fill="#ebfbee" stroke="#2f9e44" stroke-width="1.5" />
+<text x="1555" y="722" font-size="13" fill="#2f9e44" font-weight="800" text-anchor="middle" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">yes ✓</text>
+<text x="1555" y="740" font-size="11.5" fill="#374151" font-weight="500" text-anchor="middle" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">report + numbers</text>
+<rect x="1651" y="700" width="151" height="52" rx="11" fill="#fff5f5" stroke="#e03131" stroke-width="1.5" />
+<text x="1727" y="722" font-size="13" fill="#e03131" font-weight="800" text-anchor="middle" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">no ✗</text>
+<text x="1727" y="740" font-size="11.5" fill="#374151" font-weight="500" text-anchor="middle" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">roll back + escalate</text>
+<line x1="1601" y1="670" x2="1555" y2="698" stroke="#2f9e44" stroke-width="1.8" marker-end="url(#g)"/>
+<line x1="1681" y1="670" x2="1727" y2="698" stroke="#e03131" stroke-width="1.8" marker-end="url(#r)"/>
+<rect x="1480" y="766" width="322" height="64" rx="12" fill="#e03131" stroke="#e03131" stroke-width="0" filter="url(#sh)"/>
+<text x="1496" y="791" font-size="14" fill="#ffffff" font-weight="800" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">GATE · KILL_SWITCH</text>
+<text x="1496" y="812" font-size="11.5" fill="#ffe3e3" font-weight="500" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">touch KILL_SWITCH → stops at the next step,</text>
+<text x="1496" y="826" font-size="11.5" fill="#ffe3e3" font-weight="500" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">before acting, and every second of verify</text>
+<line x1="397" y1="300" x2="431" y2="300" stroke="#0c8599" stroke-width="2" marker-end="url(#t)"/>
+<line x1="651" y1="340" x2="685" y2="340" stroke="#7048e8" stroke-width="2" marker-end="url(#v)"/>
+<line x1="1098" y1="302" x2="1039" y2="302" stroke="#e8590c" stroke-width="2" marker-end="url(#o)"/>
+<line x1="1039" y1="336" x2="1098" y2="336" stroke="#7048e8" stroke-width="2" marker-end="url(#v)"/>
+<rect x="1040" y="258" width="58" height="36" rx="9" fill="#ffffff" stroke="#e8590caa" stroke-width="1" />
+<text x="1069" y="273" font-size="10.5" fill="#e8590c" font-weight="750" text-anchor="middle" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">tool</text>
+<text x="1069" y="287" font-size="10.5" fill="#e8590c" font-weight="750" text-anchor="middle" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">← call</text>
+<rect x="1040" y="346" width="58" height="36" rx="9" fill="#ffffff" stroke="#7048e8aa" stroke-width="1" />
+<text x="1069" y="361" font-size="10.5" fill="#7048e8" font-weight="750" text-anchor="middle" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">facts +</text>
+<text x="1069" y="375" font-size="10.5" fill="#7048e8" font-weight="750" text-anchor="middle" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">refs →</text>
+<path d="M1431,541 C1452,541 1452,224 1478,224" fill="none" stroke="#2f9e44" stroke-width="2" marker-end="url(#g)"/>
+<rect x="1424" y="372" width="62" height="36" rx="9" fill="#ffffff" stroke="#2f9e44aa" stroke-width="1" />
+<text x="1455" y="387" font-size="10.5" fill="#2f9e44" font-weight="700" text-anchor="middle" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">proposal</text>
+<text x="1455" y="400" font-size="10.5" fill="#2f9e44" font-weight="700" text-anchor="middle" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">+ dry run</text>
+<path d="M1480,512 L1456,512 L1456,929 L210,929 L210,922" fill="none" stroke="#2f9e44" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#g)"/>
+<rect x="760" y="919" width="330" height="21" rx="10" fill="#ffffff" stroke="#2f9e44aa" stroke-width="1" />
+<text x="925" y="933" font-size="11.5" fill="#2f9e44" font-weight="700" text-anchor="middle" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">approved action, through the allowlist only</text>
+<rect x="24" y="952" width="600" height="230" rx="18" fill="#ffffff" stroke="#334155" stroke-width="1.4" filter="url(#sh)"/>
+<text x="48" y="984" font-size="16" fill="#0f172a" font-weight="800" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">6  OUTPUTS · every run</text>
+<rect x="48" y="1001" width="112" height="22" rx="11" fill="#f1f5f9" stroke="#33415588" stroke-width="1" />
+<text x="104" y="1016" font-size="11" fill="#334155" font-weight="650" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">diagnosis.json</text>
+<text x="172" y="1016" font-size="12.5" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">root cause, evidence refs, confidence, action (JSON schema)</text>
+<rect x="48" y="1039" width="78" height="22" rx="11" fill="#f1f5f9" stroke="#33415588" stroke-width="1" />
+<text x="87" y="1054" font-size="11" fill="#334155" font-weight="650" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">report.md</text>
+<text x="138" y="1054" font-size="12.5" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">readable report: evidence, reviewer, action loop, timeline</text>
+<rect x="48" y="1077" width="126" height="22" rx="11" fill="#f1f5f9" stroke="#33415588" stroke-width="1" />
+<text x="111" y="1092" font-size="11" fill="#334155" font-weight="650" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">transcript.jsonl</text>
+<text x="186" y="1092" font-size="12.5" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">every step, every tool result, which model answered</text>
+<rect x="48" y="1115" width="126" height="22" rx="11" fill="#f1f5f9" stroke="#33415588" stroke-width="1" />
+<text x="111" y="1130" font-size="11" fill="#334155" font-weight="650" text-anchor="middle" font-family="'SF Mono', Menlo, Consolas, monospace">action_log.jsonl</text>
+<text x="186" y="1130" font-size="12.5" fill="#374151" font-weight="400" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">every attempt, refusal, dry run and approval (append-only)</text>
+<rect x="644" y="952" width="640" height="230" rx="18" fill="#ffffff" stroke="#334155" stroke-width="1.4" filter="url(#sh)"/>
+<text x="668" y="984" font-size="16" fill="#0f172a" font-weight="800" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">7  PROOF &amp; TESTING</text>
+<text x="668" y="1014" font-size="12.5"><tspan fill="#334155" font-weight="750" font-family="'SF Mono', Menlo, Consolas, monospace">faultctl.py  </tspan><tspan fill="#374151" font-weight="400" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">23 practice incidents: application + infrastructure faults</tspan></text>
+<text x="668" y="1041" font-size="12.5"><tspan fill="#334155" font-weight="750" font-family="'SF Mono', Menlo, Consolas, monospace">mentor.py  </tspan><tspan fill="#374151" font-weight="400" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">blind test: random secret fault → agent → reveal + score</tspan></text>
+<text x="668" y="1068" font-size="12.5"><tspan fill="#334155" font-weight="750" font-family="'SF Mono', Menlo, Consolas, monospace">fault_detection_check  </tspan><tspan fill="#374151" font-weight="400" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">does each fault show up in the tools? (no LLM)</tspan></text>
+<text x="668" y="1095" font-size="12.5"><tspan fill="#334155" font-weight="750" font-family="'SF Mono', Menlo, Consolas, monospace">run_all + calibration  </tspan><tspan fill="#374151" font-weight="400" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">sweeps: stated confidence vs actual accuracy</tspan></text>
+<text x="668" y="1122" font-size="12.5"><tspan fill="#334155" font-weight="750" font-family="'SF Mono', Menlo, Consolas, monospace">29 tests · 18 proofs  </tspan><tspan fill="#374151" font-weight="400" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">offline tests + prove_three_ideas.py, PASS/FAIL</tspan></text>
+<text x="668" y="1149" font-size="12.5"><tspan fill="#334155" font-weight="750" font-family="'SF Mono', Menlo, Consolas, monospace">run_everything.sh  </tspan><tspan fill="#374151" font-weight="400" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">the whole project, live, in one command</tspan></text>
+<rect x="1304" y="952" width="512" height="230" rx="18" fill="#0f172a" stroke="#0f172a" stroke-width="0" filter="url(#sh)"/>
+<text x="1328" y="984" font-size="15" fill="#fcd34d" font-weight="800" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">THE RULES THAT MAKE IT SAFE</text>
+<circle cx="1334" cy="1012" r="4" fill="#fcd34d"/>
+<text x="1346" y="1016" font-size="13" fill="#ffffff" font-weight="600" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">Diagnosis never reads feature flags.</text>
+<circle cx="1334" cy="1039" r="4" fill="#fcd34d"/>
+<text x="1346" y="1043" font-size="13" fill="#ffffff" font-weight="600" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">Actions only write the one flag a human names.</text>
+<circle cx="1334" cy="1066" r="4" fill="#fcd34d"/>
+<text x="1346" y="1070" font-size="13" fill="#ffffff" font-weight="600" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">Nothing changes without a human typing y.</text>
+<circle cx="1334" cy="1093" r="4" fill="#fcd34d"/>
+<text x="1346" y="1097" font-size="13" fill="#ffffff" font-weight="600" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">Every claim cites evidence a tool returned.</text>
+<circle cx="1334" cy="1120" r="4" fill="#fcd34d"/>
+<text x="1346" y="1124" font-size="13" fill="#ffffff" font-weight="600" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">Not sure → escalate. Didn't recover → roll back.</text>
+<text x="1328" y="1160" font-size="11.2" fill="#94a3b8" font-weight="500" text-anchor="start" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">Python 3.11 · OpenAI SDK → Groq · Prometheus · Jaeger 2 · OpenSearch · Docker</text>
 </svg>
