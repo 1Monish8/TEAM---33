@@ -199,6 +199,51 @@ def test_a_rejected_tool_call_never_crashes_the_run():
     assert calls["n"] == 2 and diagnosis["status"] == "escalated" and report.schema_errors(diagnosis) == []
 
 
+def test_daily_cap_walks_backup_key_before_smaller_model():
+    import openai
+    import types
+    import config
+    import llm
+    capped = {("key-a", "big")}
+    asked = []
+
+    class DailyCap(openai.RateLimitError):
+        def __init__(self, text):
+            Exception.__init__(self, text)
+
+    class FakeClient:
+        def __init__(self, api_key, **_):
+            self.chat = types.SimpleNamespace(completions=types.SimpleNamespace(create=lambda model, **_: answer(api_key, model)))
+
+    def answer(key, model):
+        asked.append((key, model))
+        if (key, model) in capped:
+            raise DailyCap("Rate limit reached on tokens per day (TPD): try again in 7m30s")
+        return types.SimpleNamespace(model=model, usage=None, choices=[types.SimpleNamespace(message="hi")])
+
+    saved = (config.LLM_ROUTES, config.LLM_MODEL, config.LLM_API_KEY, llm.OpenAI, llm._client, llm._route,
+             dict(llm._capped_until), llm._wait_for_token_budget)
+    config.LLM_ROUTES = [("key-a", "u", "big"), ("key-b", "u", "big"), ("key-a", "u", "small"), ("key-b", "u", "small")]
+    config.LLM_MODEL, config.LLM_API_KEY = "big", "key-a"
+    llm.OpenAI, llm._client, llm._route, llm._wait_for_token_budget = FakeClient, FakeClient("key-a"), 0, lambda _: None
+    llm._capped_until.clear()
+    try:
+        assert llm.chat([{"role": "user", "content": "x"}]) == "hi"
+        assert asked == [("key-a", "big"), ("key-b", "big")]            # backup key's big model, not the small one
+        capped.add(("key-b", "big"))
+        llm.chat([{"role": "user", "content": "x"}])
+        assert asked[-1] == ("key-a", "small") and llm.last_model_used == "small"
+        capped.clear()
+        llm._capped_until[0] = 0.0                                     # primary's cool-down is over
+        llm.chat([{"role": "user", "content": "x"}])
+        assert asked[-1] == ("key-a", "big") and llm._route == 0      # back to the best route
+    finally:
+        (config.LLM_ROUTES, config.LLM_MODEL, config.LLM_API_KEY, llm.OpenAI, llm._client, llm._route, capped_until,
+         llm._wait_for_token_budget) = saved
+        llm._capped_until.clear()
+        llm._capped_until.update(capped_until)
+
+
 def test_only_a_grounded_reviewer_dispute_lowers_confidence():
     def claim():
         return {"root_cause": {"service": "accounting"}, "confidence": 0.85, "confidence_label": "high",

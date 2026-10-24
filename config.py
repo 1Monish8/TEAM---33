@@ -58,6 +58,18 @@ LLM_MODEL = os.environ.get("MODEL_NAME") or os.environ.get("LLM_MODEL", "openai/
 LLM_API_KEY_FALLBACK = os.environ.get("API_KEY_FALLBACK") or LLM_API_KEY
 LLM_BASE_URL_FALLBACK = os.environ.get("BASE_URL_FALLBACK") or LLM_BASE_URL
 LLM_MODEL_FALLBACK = os.environ.get("MODEL_NAME_FALLBACK") or "openai/gpt-oss-20b"
+# API_KEY_BACKUP: a second account's key, used only once the primary key is daily-capped (its own quota).
+LLM_API_KEY_BACKUP = os.environ.get("API_KEY_BACKUP")
+
+# The order llm.py walks on a DAILY cap: the best model on every key first, then the smaller model.
+# Each (key, model) pair has its own Groq quota; duplicates are dropped.
+LLM_ROUTES = []
+for _key, _base_url, _model in [(LLM_API_KEY, LLM_BASE_URL, LLM_MODEL),
+                                (LLM_API_KEY_BACKUP, LLM_BASE_URL, LLM_MODEL),
+                                (LLM_API_KEY_FALLBACK, LLM_BASE_URL_FALLBACK, LLM_MODEL_FALLBACK),
+                                (LLM_API_KEY_BACKUP, LLM_BASE_URL, LLM_MODEL_FALLBACK)]:
+    if _key and (_key, _model) not in [(key, model) for key, _, model in LLM_ROUTES]:
+        LLM_ROUTES.append((_key, _base_url, _model))
 
 DEFAULT_WINDOW_MINUTES = 15
 MAX_ITEMS_PER_TOOL_RESULT = 15

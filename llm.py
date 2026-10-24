@@ -57,37 +57,50 @@ def _is_daily_cap(error):
     return "per day" in text or "(tpd)" in text or "(rpd)" in text
 
 
-PRIMARY_MODEL = config.LLM_MODEL
-_fallback_until = 0.0
+_route = 0         # index into config.LLM_ROUTES (key, base_url, model) currently answering
+_capped_until = {}  # route index -> when its daily cap should have cleared
+
+
+def _route_label(index):
+    key, _, model = config.LLM_ROUTES[index]
+    return "%s on the %s key" % (model, "primary" if key == config.LLM_API_KEY else "backup")  # never print a key
+
+
+def _use_route(index, why):
+    global _client, _route, _fallback_in_use
+    key, base_url, model = config.LLM_ROUTES[index]
+    print("  %s -> using %s" % (why, _route_label(index)), file=sys.stderr, flush=True)
+    _client = OpenAI(api_key=key, base_url=base_url, timeout=90, max_retries=0)
+    config.LLM_MODEL = model
+    _route, _fallback_in_use = index, index > 0
+    _recent_usage.clear()  # every (key, model) pair has its own per-minute budget
 
 
 def _switch_to_fallback(error):
-    # Only a DAILY cap moves us off the primary: a per-minute burst is fixed by waiting (Groq says how long), and
+    # Only a DAILY cap moves us off a route: a per-minute burst is fixed by waiting (Groq says how long), and
     # switching on a burst once put a whole sweep on the smaller model while the primary had 979 requests left.
-    # The switch is temporary: after the cool-down Groq names (at least 10 min) we go back to the primary.
+    # The capped route rests for the cool-down Groq names (at least 10 min); we take the first route that is not
+    # resting: the backup key's big model before any small model. If all are capped, the one that clears first.
     # Printed loudly, and every transcript line records which model answered (the team form declares both).
-    global _client, _fallback_in_use, _fallback_until
-    if _fallback_in_use or not config.LLM_API_KEY_FALLBACK:
-        return False
-    if config.LLM_MODEL_FALLBACK == PRIMARY_MODEL and config.LLM_API_KEY_FALLBACK == config.LLM_API_KEY:
-        return False  # the "fallback" would be the same quota: switching would not help
-    _fallback_until = time.time() + max(600.0, _retry_after_seconds(error, 600.0))
-    print("  PRIMARY MODEL DAILY-CAPPED -> using fallback model %s until %s" % (
-        config.LLM_MODEL_FALLBACK, time.strftime("%H:%M", time.localtime(_fallback_until))), file=sys.stderr, flush=True)
-    _client = OpenAI(api_key=config.LLM_API_KEY_FALLBACK, base_url=config.LLM_BASE_URL_FALLBACK, timeout=90, max_retries=0)
-    config.LLM_MODEL = config.LLM_MODEL_FALLBACK
-    _recent_usage.clear()  # the fallback has its own per-minute budget
-    _fallback_in_use = True
+    if len(config.LLM_ROUTES) < 2:
+        return False  # nothing else has its own quota: switching would not help
+    now = time.time()
+    _capped_until[_route] = now + max(600.0, _retry_after_seconds(error, 600.0))
+    free = [i for i in range(len(config.LLM_ROUTES)) if _capped_until.get(i, 0.0) <= now]
+    if free:
+        _use_route(free[0], "%s DAILY-CAPPED" % _route_label(_route))
+    else:  # Groq's daily window rolls, so the route whose cap clears soonest may have room again
+        _use_route(min((i for i in _capped_until if i != _route), key=_capped_until.get),
+                   "every key and model DAILY-CAPPED")
     return True
 
 
 def _maybe_return_to_primary():
-    global _client, _fallback_in_use
-    if _fallback_in_use and time.time() >= _fallback_until:
-        print("  cool-down over -> back to primary model %s" % PRIMARY_MODEL, file=sys.stderr, flush=True)
-        _client, _fallback_in_use = None, False
-        config.LLM_MODEL = PRIMARY_MODEL
-        _recent_usage.clear()
+    # once a better route's cool-down is over, go back to it
+    now = time.time()
+    better = [i for i in range(_route) if _capped_until.get(i, 0.0) <= now]
+    if better:
+        _use_route(better[0], "cool-down over")
 
 
 def _estimate_tokens(request):
@@ -150,13 +163,8 @@ def chat(messages, tools=None, tool_choice="auto", temperature=0.0):
         except TRANSIENT_ERRORS as error:
             if isinstance(error, openai.RateLimitError):
                 _recent_usage.append((time.time(), TOKEN_BUDGET))  # treat the minute as full
-                # a daily cap will not clear by waiting: change model (bursts: wait as long as Groq says, below)
+                # a daily cap will not clear by waiting: change key or model (bursts: wait as long as Groq says, below)
                 if _is_daily_cap(error) and _switch_to_fallback(error):
-                    continue
-                # the FALLBACK is daily-capped too: Groq's daily window rolls, so the primary may have room again
-                if _is_daily_cap(error) and _fallback_in_use:
-                    global _fallback_until
-                    _fallback_until = 0.0
                     continue
             if wait_seconds is None:
                 raise

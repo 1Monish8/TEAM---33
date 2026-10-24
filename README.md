@@ -38,6 +38,7 @@ cd -
 python3.11 -m venv .venv && .venv/bin/pip install -r requirements.txt
 # .env.local (git-ignored):  export API_KEY="..."   export BASE_URL="https://api.groq.com/openai/v1"
 #                            export MODEL_NAME="openai/gpt-oss-120b"
+#   optional backup key:     export API_KEY_BACKUP="..."    (a second account, used only when the primary is daily-capped)
 #   optional fallback:       export API_KEY_FALLBACK="..."  export MODEL_NAME_FALLBACK="..."
 .venv/bin/python check_stack.py          # pre-flight: every data source fresh -> ALL GREEN
 .venv/bin/python smoke_test_llm.py       # key + tool calling -> PASS
@@ -144,7 +145,7 @@ If recovery isn't confirmed, the inverse action runs (for example, restoring the
   - pacing keeps us under 8,000 tokens per minute;
   - Groq's "try again in Xs" is honoured;
   - old tool results are compacted, keeping every ref;
-  - a daily cap, or a limit that survives two waits, switches to the fallback model `openai/gpt-oss-20b`, which has its own per-model quota (or to `API_KEY_FALLBACK`).
+  - a daily cap walks a route list, each (key, model) pair having its own quota: `gpt-oss-120b` on the primary key → `gpt-oss-120b` on the backup key (`API_KEY_BACKUP`) → `gpt-oss-20b` on the primary key → `gpt-oss-20b` on the backup key. A capped route rests for the cool-down Groq names (at least 10 min), then the agent goes back to the best free route.
   - The transcript records which model answered every call.
 - **Tool failures:** a tool exception becomes `{"error": …}` for the model and never kills the run.
 - **Stack health:** `check_stack.py --fix` and the sweep pre-flight restart a collector whose Prometheus export froze. This happened to us after about 3 hours of uptime.
@@ -179,7 +180,7 @@ If recovery isn't confirmed, the inverse action runs (for example, restoring the
   - In those cases verification reports "not recovered" and the agent escalates. That's the intended, honest outcome.
 - **Flag toggling has no automatic rollback**, because restoring the previous variant would mean reading flag state. A failed flag fix escalates instead.
 - **Kafka incidents are the weakest area:** consumer lag isn't exposed as a metric the tools read, so the agent relies on fraud-detection/accounting traces and logs.
-- **Rate limits (the biggest operational risk):** Groq's free tier allows 8,000 tokens/minute **and 200,000 tokens/day per model**. One investigation costs about 20–35k tokens, so each model handles roughly 6–8 investigations a day. Pacing handles the per-minute limit. A daily cap switches to the fallback model, and back once the cap clears. Both models capped out during our overnight testing. **For the hidden test, use a key with a higher limit** (the organisers', or `API_KEY_FALLBACK` from another account).
+- **Rate limits (the biggest operational risk):** Groq's free tier allows 8,000 tokens/minute **and 200,000 tokens/day per model**. One investigation costs about 20–35k tokens, so each model handles roughly 6–8 investigations a day. Pacing handles the per-minute limit. A daily cap switches to the backup key's 120b first, then to the smaller model, and back once the cap clears; with two keys that is about 4× one model's daily budget. Both models capped out during our overnight testing. **For the hidden test, use a key with a higher limit** (the organisers', or `API_KEY_FALLBACK` from another account).
 - **Collector freeze:** span metrics stopped once after about 3 hours. The tool reports it (`pipeline_warning`) and `check_stack.py --fix` repairs it, but the cause is upstream.
 
 ## Team

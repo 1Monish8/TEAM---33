@@ -67,7 +67,7 @@ def checks():
     state_file = config.REPO_ROOT / "practice" / ".faultctl_state.json"
     active = json.loads(state_file.read_text()).get("active", []) if state_file.exists() else []
     add("no practice fault left injected", not active, ", ".join(active) if active else "none")
-    add("LLM key configured", bool(config.LLM_API_KEY), "model %s, fallback %s" % (config.LLM_MODEL, config.LLM_MODEL_FALLBACK))
+    add("LLM key configured", bool(config.LLM_API_KEY), "model %s; on a daily cap: %d key/model routes, backup key %s" % (config.LLM_MODEL, len(config.LLM_ROUTES), "set" if config.LLM_API_KEY_BACKUP else "not set"))
     return results
 
 
