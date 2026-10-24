@@ -7,3 +7,4 @@ runs/
 practice/.faultctl_state.json
 KILL_SWITCH
 .DS_Store
+practice/.mentor_secret.json
