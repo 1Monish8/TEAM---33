@@ -544,10 +544,11 @@ def get_container_health(window_minutes=15):
             problems.append("OOM_KILLED")
         # Windowed: Docker's RestartCount is a LIFETIME total, so kafka, restarted a few times over a night, was
         # reported as RESTART_LOOP forever. A loop means restarts INSIDE the window: repeated uptime resets, or
-        # several lifetime restarts and the latest one inside the window.
+        # several lifetime restarts and the latest one inside the window. ONE reset in the window is a crash, not a
+        # loop, even when earlier incidents left the lifetime count high (recommendation once showed "1 restarts").
         resets = metrics.get("uptime_resets_in_window") or 0
-        if resets >= 2 or (row["restart_count"] >= 2 and resets >= 1 and row["uptime_seconds"] < window_minutes * 60):
-            problems.append("RESTART_LOOP (%d restarts in the last %d min)" % (max(resets, 1), window_minutes))
+        if resets >= 2 or (row["restart_count"] >= 2 and resets == 0 and row["uptime_seconds"] < 120):
+            problems.append("RESTART_LOOP (%d restarts in the last %d min)" % (max(resets, 2), window_minutes))
         elif row["restart_count"] >= 1 and row["uptime_seconds"] < window_minutes * 60:
             # Docker's restart policy brought it back: it CRASHED (e.g. memory leak -> OOM) during the window
             problems.append("CRASHED_AND_RESTARTED (restarted by Docker %d min ago)" % (row["uptime_seconds"] // 60))
