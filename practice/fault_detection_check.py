@@ -67,8 +67,10 @@ CHECKS = {
         h[0].startswith(("SLOW", "SLOWER")) or "shipping" in h[1][:2], "shipping %s; top %s" % h))(_health("shipping"))),
     "kafka-consumer-dead": ("P0 consumer failure", lambda: (lambda d: (
         ("fraud-detection", "CONSUMER_GROUP_EMPTY") in d or ("fraud-detection", "QUEUE_BACKLOG") in d, "deps %s" % sorted(d)))(_dependencies())),
-    "kafka-queue-problems": ("P0 queue backlog", lambda: (lambda d: (
-        ("fraud-detection", "QUEUE_BACKLOG") in d, "deps %s" % sorted(d)))(_dependencies())),
+    # at this stack's ~0.06 orders/s a 3 s-per-message consumer never builds lag: the signal is its slow processing
+    "kafka-queue-problems": ("P0 queue backlog / slow consumer", lambda: (lambda d, h: (
+        ("fraud-detection", "QUEUE_BACKLOG") in d or h[0].startswith(("SLOW", "SLOWER")),
+        "deps %s; fraud-detection %s; top %s" % (sorted(d), h[0][:90], h[1])))(_dependencies(), _health("fraud-detection"))),
     "homepage-flood": ("P0 traffic surge", lambda: (lambda h: (
         "TRAFFIC_SURGE" in h[0], "frontend-proxy %s; top %s" % h))(_health("frontend-proxy"))),
     "product-catalog-db-lock": ("P1 slow queries / locks", lambda: (lambda h: (

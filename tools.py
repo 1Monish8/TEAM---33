@@ -267,7 +267,7 @@ def get_service_health(window_minutes=5):
 
     # Slow TAIL (P0 slow dependency affecting a few requests): intlShippingSlowdown delays only non-US orders, ~1 in 9,
     # about 2 calls in a whole incident. p95 never moves, but an operation that NEVER takes 2 s suddenly doing so is
-    # a change from its own normal. Server spans only, so a caller waiting on it is not counted twice.
+    # a change from its own normal. Server and consumer spans only, so a caller waiting on it is not counted twice.
     for service, (operation, slow_now, slow_base, waiting) in _slow_tail(window).items():
         row = rows.get(service)
         if row is None or service in CLIENT_SERVICES or not row["status_hint"].startswith("ok"):
@@ -317,7 +317,7 @@ def get_service_health(window_minutes=5):
             row["ref"] = register_evidence_item("metric", {
                 "service": row["service"], "metric": "calls_over_2s", "operation": row["slow_tail"]["operation"],
                 "value": row["slow_tail"]["calls_over_2s"], "baseline": row["slow_tail"]["baseline_calls_over_2s"],
-                "promql": _SLOW_CALLS % {"kind": "SPAN_KIND_SERVER", "window": window}, "timestamp": _now_iso(),
+                "promql": _SLOW_CALLS % {"kind": _OWN_WORK, "window": window}, "timestamp": _now_iso(),
                 "deviation_score": row["deviation_score"]})
             continue
         if row["status_hint"].startswith("NOT_REPORTING: DOWN"):
@@ -351,9 +351,12 @@ def get_service_health(window_minutes=5):
     return result
 
 
+# work a service does for others: requests it serves and Kafka messages it consumes (kafkaQueueProblems makes
+# fraud-detection take 3 s per message; at ~0.06 orders/s no backlog builds and p95 is below the traffic floor)
+_OWN_WORK = "SPAN_KIND_SERVER|SPAN_KIND_CONSUMER"
 _SLOW_CALLS = ('sum by (service_name, span_name) (increase(traces_span_metrics_duration_milliseconds_bucket'
-               '{span_kind="%(kind)s",le="+Inf"}[%(window)s])) - sum by (service_name, span_name) (increase('
-               'traces_span_metrics_duration_milliseconds_bucket{span_kind="%(kind)s",le="2000"}[%(window)s]))')
+               '{span_kind=~"%(kind)s",le="+Inf"}[%(window)s])) - sum by (service_name, span_name) (increase('
+               'traces_span_metrics_duration_milliseconds_bucket{span_kind=~"%(kind)s",le="2000"}[%(window)s]))')
 
 
 def _slow_tail(window):
@@ -362,9 +365,9 @@ def _slow_tail(window):
     # p95). waiting = its OWN outgoing calls are slow too, so it is waiting on a deeper service (back-tested on the
     # shipping slowdown: frontend and checkout were flagged with shipping and frontend ranked first).
     try:
-        now = run_prometheus_query(_SLOW_CALLS % {"kind": "SPAN_KIND_SERVER", "window": window})
+        now = run_prometheus_query(_SLOW_CALLS % {"kind": _OWN_WORK, "window": window})
         base = run_prometheus_query("quantile_over_time(0.5, (%s)[2h:1m] offset %s)" % (
-            _SLOW_CALLS % {"kind": "SPAN_KIND_SERVER", "window": "5m"}, BASELINE_GAP))
+            _SLOW_CALLS % {"kind": _OWN_WORK, "window": "5m"}, BASELINE_GAP))
         outgoing = {}
         for r in run_prometheus_query(_SLOW_CALLS % {"kind": "SPAN_KIND_CLIENT", "window": window}):
             if float(r["value"][1]) == float(r["value"][1]):
