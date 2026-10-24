@@ -586,6 +586,8 @@ def _print_proposal(diagnosis, plan, progress):
     progress("  root cause : %s (%s), confidence %s %.2f" % (root["service"], root["fault_type"], diagnosis["confidence_label"], diagnosis["confidence"]))
     progress("  summary    : %s" % root["summary"])
     progress("  evidence   : %s" % ", ".join(e["reference"] for e in diagnosis["evidence"]))
+    for note in diagnosis.get("investigation", {}).get("calibration_notes", []):
+        progress("  confidence : %s" % note[:200])  # why the code capped (or kept) the model's own number
     if diagnosis.get("review"):
         progress("  reviewer   : %s" % diagnosis["review"]["verdict"][:200])
     progress("--- PROPOSED ACTION (dry run: nothing has changed yet) ---")
