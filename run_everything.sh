@@ -60,8 +60,8 @@ step "2. pre-flight: every data source fresh"
 $PY check_stack.py --fix || fail "Pre-flight failed: fix the FAIL lines above, then run again."
 
 step "3. offline tests (no stack, no LLM)"
-$PY tests/test_offline.py | tail -3
-echo "passed: $($PY tests/test_offline.py 2>/dev/null | grep -c '^ok ')"
+results=$($PY tests/test_offline.py 2>&1) || { echo "$results"; fail "Offline tests failed."; }
+echo "passed: $(echo "$results" | grep -c '^ok ') tests"
 
 step "4. LLM key and tool calling"
 $PY smoke_test_llm.py || fail "LLM check failed: check API_KEY in .env.local (or the daily token cap)."
