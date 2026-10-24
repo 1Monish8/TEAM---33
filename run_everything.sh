@@ -30,10 +30,12 @@ fail() { printf '\n\033[1;31m%s\033[0m\n' "$1"; exit 1; }
 step "0. nothing else may inject faults at the same time"
 if pgrep -f "run_all.py|fault_detection_check.py|demo.sh" >/dev/null; then
   echo "Another practice run is active. Running both would spoil both. Active now:"
-  pgrep -fl "run_all.py|fault_detection_check.py|demo.sh" | grep -v "while pgrep" | sed 's/^[0-9]* /   /' | cut -c1-110
+  for pid in $(pgrep -f "run_all.py|fault_detection_check.py|demo.sh"); do
+    ps -o command= -p "$pid" 2>/dev/null | tr '\n' ' ' | grep -E -o "(run_all|fault_detection_check)\.py[^;]*|demo\.sh.*" | head -1 | cut -c1-100 | sed 's/^/   /'
+  done | sort -u
   echo "Progress: tail -3 runs/fault-detection.log runs/day2-final-sweep.log  ·  answer N to wait, then run this again"
   read -r -p "Stop it and continue? [y/N] " answer
-  [ "$answer" = "y" ] || fail "Stopped. Nothing was changed."
+  case "$answer" in y|Y|yes|YES|Yes) ;; *) fail "Stopped. Nothing was changed." ;; esac
   pkill -f "while pgrep -f fault_detection_check" ; pkill -f fault_detection_check.py ; pkill -f run_all.py ; sleep 2
 fi
 [ -f KILL_SWITCH ] && { echo "A KILL_SWITCH file is present; removing it."; rm -f KILL_SWITCH; }
