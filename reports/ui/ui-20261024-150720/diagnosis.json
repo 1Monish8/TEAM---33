@@ -1,0 +1,128 @@
+{
+  "incident_id": "ui-20261024-150720",
+  "generated_at": "2026-10-24T09:46:40Z",
+  "alert": "Latency p95 above threshold on frontend",
+  "status": "diagnosed",
+  "root_cause": {
+    "service": "ad",
+    "fault_type": "resource_exhaustion",
+    "summary": "The ad service is experiencing memory pressure (96% of its limit), which leads to long processing times for GetAds calls, inflating overall request latency observed at the frontend."
+  },
+  "symptom_services": [
+    "frontend-proxy",
+    "frontend"
+  ],
+  "confidence": 0.7,
+  "confidence_label": "medium",
+  "evidence": [
+    {
+      "service": "ad",
+      "metric": "p95_latency_ms",
+      "value": 4549.2,
+      "promql": "histogram_quantile(0.95, sum by (service_name, le) (rate(traces_span_metrics_duration_milliseconds_bucket[5m])))",
+      "timestamp": "2026-10-24T09:37:22Z",
+      "baseline": 24.6,
+      "deviation_score": 50.0,
+      "reference": "metric-1",
+      "kind": "metric",
+      "why_it_matters": "ad service p95 latency 4549\u202fms vs baseline 24.6\u202fms, highest deviation_score."
+    },
+    {
+      "service": "ad",
+      "metric": "container.memory_high",
+      "value": 96.232,
+      "promql": "(max by (container_name) (container_memory_usage_total_bytes) / max by (container_name) (container_memory_usage_limit_bytes) * 100)",
+      "timestamp": "2026-10-24T09:42:30Z",
+      "reference": "metric-13",
+      "kind": "metric",
+      "why_it_matters": "ad container memory at 96% of limit, flagged MEMORY_HIGH."
+    }
+  ],
+  "proposed_action": {
+    "action": "restart_service",
+    "target": "ad",
+    "parameters": {},
+    "reason": "Ad service memory usage is at 96% of its limit, causing severe latency (p95 ~4.5\u202fs) and the latency hotspot is in its GetAds call.",
+    "requires_approval": true
+  },
+  "investigation": {
+    "tool_calls": 7,
+    "tools_used": [
+      "get_container_health",
+      "get_dependency_health",
+      "get_service_health",
+      "get_trace",
+      "search_logs",
+      "search_traces"
+    ],
+    "model": "openai/gpt-oss-120b",
+    "duration_seconds": 558.6,
+    "calibration_notes": [
+      "confidence capped from 0.86 to 0.70: only 1 evidence kind(s) name ad"
+    ]
+  },
+  "timeline": [
+    {
+      "time": "2026-10-24T09:37:21Z",
+      "event": "Alert received: Latency p95 above threshold on frontend"
+    },
+    {
+      "time": "2026-10-24T09:46:40Z",
+      "event": "Diagnosis submitted after 7 tool calls"
+    }
+  ],
+  "prevention": "Increase memory limit for ad service or add auto\u2011restart on high memory usage.",
+  "review": {
+    "ran": true,
+    "disputed": false,
+    "better_candidate": null,
+    "verdict": "CONFIRMED: the ad service shows the highest deviation_score (50.0) with a massive p95 latency jump (4549 ms vs 24.6 ms baseline) and 96% memory usage, directly linking its resource exhaustion to the observed latency.",
+    "model": "openai/gpt-oss-120b"
+  },
+  "action_loop": {
+    "started_at": "2026-10-24T09:46:41Z",
+    "proposed": {
+      "action": "restart_service",
+      "target": "ad",
+      "parameters": {},
+      "reason": "Ad service memory usage is at 96% of its limit, causing severe latency (p95 ~4.5\u202fs) and the latency hotspot is in its GetAds call.",
+      "requires_approval": true
+    },
+    "mode": "interactive",
+    "dry_run": {
+      "ok": true,
+      "command": "docker restart ad",
+      "effect": "Container ad stops and starts (or starts, if it was stopped). Requests to it fail for a few seconds; in-memory state (caches, leaked memory) is cleared.",
+      "reversible": false,
+      "undo": "none needed: a restart changes no configuration"
+    },
+    "parameters": {},
+    "approved": false,
+    "approved_by": null,
+    "approved_at": "2026-10-24T09:50:18Z",
+    "outcome": "rejected by the human: no change was made",
+    "finished_at": "2026-10-24T09:50:18Z",
+    "action_log_entries": [
+      {
+        "incident_id": "ui-20261024-150720",
+        "purpose": "rejected by the human",
+        "action": "restart_service",
+        "target": "ad",
+        "parameters": {},
+        "approved": false,
+        "planned": {
+          "ok": true,
+          "command": "docker restart ad",
+          "effect": "Container ad stops and starts (or starts, if it was stopped). Requests to it fail for a few seconds; in-memory state (caches, leaked memory) is cleared.",
+          "reversible": false,
+          "undo": "none needed: a restart changes no configuration"
+        },
+        "result": {
+          "ok": false,
+          "reason": "rejected by the human"
+        },
+        "logged_at": "2026-10-24T09:50:18Z"
+      }
+    ]
+  }
+}

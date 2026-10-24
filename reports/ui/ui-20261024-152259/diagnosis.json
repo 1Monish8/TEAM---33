@@ -1,0 +1,72 @@
+{
+  "incident_id": "ui-20261024-152259",
+  "generated_at": "2026-10-24T10:06:24Z",
+  "alert": "Request rate and latency spiking on frontend-proxy",
+  "status": "escalated",
+  "root_cause": {
+    "service": null,
+    "fault_type": "unknown",
+    "summary": "Automatic escalation: no accepted diagnosis within the iteration/rejection budget. The cited items are the most suspicious signals the tools returned; a human should take over."
+  },
+  "symptom_services": [],
+  "confidence": 0.2,
+  "confidence_label": "low",
+  "evidence": [
+    {
+      "service": "frontend",
+      "metric": "requests_per_second",
+      "value": 55.0645,
+      "promql": "sum by (service_name) (rate(traces_span_metrics_calls_total[5m]))",
+      "timestamp": "2026-10-24T09:53:00Z",
+      "baseline": 26.602,
+      "deviation_score": 2.366,
+      "reference": "metric-1",
+      "kind": "metric"
+    }
+  ],
+  "proposed_action": {
+    "action": "escalate_to_human",
+    "target": null,
+    "parameters": {},
+    "reason": "The agent could not reach a confident, evidence-backed diagnosis.",
+    "requires_approval": true
+  },
+  "investigation": {
+    "tool_calls": 9,
+    "tools_used": [
+      "get_container_health",
+      "get_dependency_health",
+      "get_service_health",
+      "list_services",
+      "search_logs",
+      "search_traces"
+    ],
+    "model": "openai/gpt-oss-120b",
+    "duration_seconds": 804.8,
+    "calibration_notes": []
+  },
+  "timeline": [
+    {
+      "time": "2026-10-24T09:52:59Z",
+      "event": "Alert received: Request rate and latency spiking on frontend-proxy"
+    },
+    {
+      "time": "2026-10-24T10:06:24Z",
+      "event": "Diagnosis submitted after 9 tool calls"
+    }
+  ],
+  "action_loop": {
+    "started_at": "2026-10-24T10:06:24Z",
+    "proposed": {
+      "action": "escalate_to_human",
+      "target": null,
+      "parameters": {},
+      "reason": "The agent could not reach a confident, evidence-backed diagnosis.",
+      "requires_approval": true
+    },
+    "mode": "interactive",
+    "outcome": "escalated to a human, no action: the agent was not confident enough to propose a change",
+    "finished_at": "2026-10-24T10:06:24Z",
+    "action_log_entries": []
+  }
+}

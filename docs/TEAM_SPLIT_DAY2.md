@@ -105,7 +105,7 @@ git push origin main
 ## 6. After the last push (anyone)
 
 ```bash
-cd team33 && git pull origin main && git log --format='%an' | sort -u && git log -p | grep -c "gsk_"
+cd team33 && git pull origin main && git log --format='%an' | sort -u && git log -p | grep -cE "gsk_[A-Za-z0-9]{20,}"
 ```
 
 - **Expected:** all five names, and a key count of `0`.

@@ -1,0 +1,80 @@
+{
+  "incident_id": "ui-20261024-160033",
+  "generated_at": "2026-10-24T10:44:51Z",
+  "alert": "Users report errors or slowness in the shop; the on-call alert fired on the frontend",
+  "status": "escalated",
+  "root_cause": {
+    "service": null,
+    "fault_type": "unknown",
+    "summary": "Automatic escalation: no accepted diagnosis within the iteration/rejection budget. The cited items are the most suspicious signals the tools returned; a human should take over."
+  },
+  "symptom_services": [],
+  "confidence": 0.2,
+  "confidence_label": "low",
+  "evidence": [
+    {
+      "service": "payment",
+      "metric": "error_ratio",
+      "value": 0.3273,
+      "promql": "sum by (service_name) (rate(traces_span_metrics_calls_total{status_code=\"STATUS_CODE_ERROR\"}[5m])) / sum by (service_name) (rate(traces_span_metrics_calls_total[5m]))",
+      "timestamp": "2026-10-24T10:30:34Z",
+      "baseline": 0.0526,
+      "deviation_score": 5.494,
+      "reference": "metric-1",
+      "kind": "metric"
+    },
+    {
+      "service": "email",
+      "metric": "container.crashed_and_restarted",
+      "value": 1.0,
+      "promql": "max by (container_name) (resets(container_uptime_seconds[5m]))",
+      "timestamp": "2026-10-24T10:36:35Z",
+      "reference": "metric-3",
+      "kind": "metric"
+    }
+  ],
+  "proposed_action": {
+    "action": "escalate_to_human",
+    "target": null,
+    "parameters": {},
+    "reason": "The agent could not reach a confident, evidence-backed diagnosis.",
+    "requires_approval": true
+  },
+  "investigation": {
+    "tool_calls": 5,
+    "tools_used": [
+      "get_container_health",
+      "get_service_health",
+      "list_services",
+      "search_logs",
+      "search_traces"
+    ],
+    "model": "openai/gpt-oss-120b",
+    "duration_seconds": 857.2,
+    "calibration_notes": []
+  },
+  "timeline": [
+    {
+      "time": "2026-10-24T10:30:33Z",
+      "event": "Alert received: Users report errors or slowness in the shop; the on-call alert fired on the frontend"
+    },
+    {
+      "time": "2026-10-24T10:44:51Z",
+      "event": "Diagnosis submitted after 5 tool calls"
+    }
+  ],
+  "action_loop": {
+    "started_at": "2026-10-24T10:44:51Z",
+    "proposed": {
+      "action": "escalate_to_human",
+      "target": null,
+      "parameters": {},
+      "reason": "The agent could not reach a confident, evidence-backed diagnosis.",
+      "requires_approval": true
+    },
+    "mode": "interactive",
+    "outcome": "escalated to a human, no action: the agent was not confident enough to propose a change",
+    "finished_at": "2026-10-24T10:44:51Z",
+    "action_log_entries": []
+  }
+}
