@@ -184,6 +184,8 @@ def get_service_health(window_minutes=5):
             " / sum by (service_name) (rate(traces_span_metrics_calls_total[" + window + "]))"
         ),
         "requests_per_second": "sum by (service_name) (rate(traces_span_metrics_calls_total[" + window + "]))",
+        # surges start suddenly: 130 s into a homepage flood the 5-minute rate had risen only 1.6x (2 m rate: 5x)
+        "requests_per_second_recent": "sum by (service_name) (rate(traces_span_metrics_calls_total[2m]))",
         "p95_latency_ms": (
             "histogram_quantile(0.95, sum by (service_name, le) "
             "(rate(traces_span_metrics_duration_milliseconds_bucket[" + window + "])))"
@@ -217,6 +219,7 @@ def get_service_health(window_minutes=5):
                 value = None
             row = rows.setdefault(service_name, {"service": service_name, "error_ratio": 0.0, "error_ratio_baseline": None,
                                                  "requests_per_second": 0.0, "requests_per_second_baseline": None,
+                                                 "requests_per_second_recent": None,
                                                  "p95_latency_ms": None, "p95_baseline_ms": None})
             if field == "seen_last_hour":
                 continue
@@ -391,6 +394,8 @@ def _slow_tail(window):
 
 def _traffic_ratio(row):
     rps, base = row.get("requests_per_second"), row.get("requests_per_second_baseline")
+    if rps is not None and row.get("requests_per_second_recent"):
+        rps = max(rps, row["requests_per_second_recent"])  # the last 2 minutes: a surge shows before the 5 m rate catches up
     if rps is None or not base or base < 0.05:
         return None
     return rps / base

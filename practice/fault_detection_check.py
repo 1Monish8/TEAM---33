@@ -71,8 +71,10 @@ CHECKS = {
     "kafka-queue-problems": ("P0 queue backlog / slow consumer", lambda: (lambda d, h: (
         ("fraud-detection", "QUEUE_BACKLOG") in d or h[0].startswith(("SLOW", "SLOWER")),
         "deps %s; fraud-detection %s; top %s" % (sorted(d), h[0][:90], h[1])))(_dependencies(), _health("fraud-detection"))),
-    "homepage-flood": ("P0 traffic surge", lambda: (lambda h: (
-        "TRAFFIC_SURGE" in h[0], "frontend-proxy %s; top %s" % h))(_health("frontend-proxy"))),
+    # each homepage request is several frontend calls, so frontend rises more than frontend-proxy (5x vs 2.5x)
+    "homepage-flood": ("P0 traffic surge", lambda: (lambda p, f: (
+        "TRAFFIC_SURGE" in p[0] or "TRAFFIC_SURGE" in f[0], "frontend-proxy %s; frontend %s; top %s" % (p[0][:50], f[0][:50], f[1])))(
+        _health("frontend-proxy"), _health("frontend"))),
     "product-catalog-db-lock": ("P1 slow queries / locks", lambda: (lambda h: (
         h[0].startswith(("SLOW", "SLOWER", "ERRORS")) or "product-catalog" in h[1][:2], "product-catalog %s; top %s" % h))(_health("product-catalog"))),
     "ad-gc-pauses": ("P2 GC pauses", lambda: (lambda h, c: (
