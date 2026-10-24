@@ -1,0 +1,631 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Incident Zero · Control Room</title>
+<style>
+:root{
+  --bg:#0a0f1e; --bg2:#0f1629; --panel:#131c33; --panel2:#18233f; --line:#25314f; --line2:#33416a;
+  --text:#e7ecf7; --muted:#8e9bbd; --dim:#64708f;
+  --purple:#9b8cff; --orange:#ff9f5a; --green:#3ddc97; --red:#ff6b6b; --blue:#64a8ff; --teal:#2fd4c4; --amber:#ffc857; --pink:#ff7eb6;
+  --r:14px; --mono:'SF Mono',Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:14px/1.45 -apple-system,'SF Pro Text','Inter','Helvetica Neue',Arial,sans-serif}
+button{font:inherit;cursor:pointer}
+a{color:var(--blue)}
+code,.mono{font-family:var(--mono);font-size:12.5px}
+.app{display:grid;grid-template-columns:232px 1fr;grid-template-rows:64px 1fr;height:100vh}
+header{grid-column:1/3;display:flex;align-items:center;gap:16px;padding:0 22px;background:linear-gradient(90deg,#0d1430,#16245a);border-bottom:1px solid var(--line)}
+.logo{display:flex;align-items:center;gap:12px;font-weight:800;font-size:18px;letter-spacing:.2px}
+.logo .dot{width:30px;height:30px;border-radius:9px;background:conic-gradient(var(--purple),var(--orange),var(--green),var(--purple));box-shadow:0 0 18px #9b8cff55}
+.logo small{display:block;font-weight:500;font-size:11.5px;color:var(--muted)}
+.pills{margin-left:auto;display:flex;gap:10px;align-items:center}
+.pill{display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:999px;background:#ffffff0d;border:1px solid var(--line2);font-size:12.5px;font-weight:600;white-space:nowrap}
+.pill .led{width:9px;height:9px;border-radius:50%;background:var(--dim)}
+.led.ok{background:var(--green);box-shadow:0 0 8px var(--green)} .led.bad{background:var(--red);box-shadow:0 0 8px var(--red)} .led.warn{background:var(--amber);box-shadow:0 0 8px var(--amber)}
+.kill{border:1px solid #ff6b6b88;background:#ff6b6b18;color:#ffb3b3;font-weight:800;padding:8px 14px;border-radius:999px}
+.kill.on{background:var(--red);color:#fff;box-shadow:0 0 22px #ff6b6b88;animation:pulse 1.2s infinite}
+@keyframes pulse{50%{box-shadow:0 0 4px #ff6b6b44}}
+nav{background:var(--bg2);border-right:1px solid var(--line);padding:18px 12px;display:flex;flex-direction:column;gap:4px}
+nav button{display:flex;align-items:center;gap:12px;text-align:left;background:none;border:0;color:var(--muted);padding:11px 14px;border-radius:11px;font-weight:600;font-size:14.5px}
+nav button:hover{background:#ffffff08;color:var(--text)}
+nav button.active{background:linear-gradient(90deg,#9b8cff26,#9b8cff08);color:#fff;box-shadow:inset 3px 0 0 var(--purple)}
+nav .ico{width:22px;text-align:center;font-size:16px}
+nav .foot{margin-top:auto;color:var(--dim);font-size:11.5px;padding:10px 12px;line-height:1.5}
+main{overflow:auto;padding:24px 28px 60px}
+h1{font-size:22px;margin:0 0 4px} .sub{color:var(--muted);margin:0 0 20px}
+h2{font-size:15px;margin:0;display:flex;align-items:center;gap:8px}
+.grid{display:grid;gap:18px}
+.g2{grid-template-columns:minmax(0,1fr) minmax(0,1fr)} .g3{grid-template-columns:repeat(3,minmax(0,1fr))} .g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.grid>*{min-width:0} .wrapchip{white-space:normal}
+#svcTable,#logBody,#histBody,#calBody,#detBody,#scoreBody{overflow-x:auto}
+@media(max-width:1250px){.g2,.g3,.g4{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;box-shadow:0 8px 24px #00000033}
+.card .head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.card .head .right{margin-left:auto;display:flex;gap:8px}
+.btn{border:1px solid var(--line2);background:var(--panel2);color:var(--text);padding:8px 14px;border-radius:10px;font-weight:650;font-size:13px}
+.btn:hover{border-color:#5d6f9f;background:#1e2a4b}
+.btn.primary{background:linear-gradient(180deg,#8b7cff,#6d5cf0);border-color:#9b8cff;color:#fff}
+.btn.go{background:linear-gradient(180deg,#36d18f,#22a96f);border-color:#3ddc97;color:#04150d}
+.btn.danger{background:linear-gradient(180deg,#ff7a7a,#e04848);border-color:#ff8f8f;color:#fff}
+.btn.warn{background:linear-gradient(180deg,#ffd37a,#f0a83a);border-color:#ffc857;color:#2a1800}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.sm{padding:5px 10px;font-size:12px;border-radius:8px}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;border:1px solid var(--line2);background:#ffffff0a;white-space:nowrap}
+.chip.red{color:#ffb0b0;border-color:#ff6b6b66;background:#ff6b6b14} .chip.green{color:#9ff0c9;border-color:#3ddc9766;background:#3ddc9714}
+.chip.amber{color:#ffe0a0;border-color:#ffc85766;background:#ffc85714} .chip.blue{color:#b3d3ff;border-color:#64a8ff66;background:#64a8ff14}
+.chip.purple{color:#cfc7ff;border-color:#9b8cff66;background:#9b8cff14} .chip.gray{color:var(--muted)} .chip.teal{color:#a6f2ea;border-color:#2fd4c466;background:#2fd4c414}
+.chip.orange{color:#ffcaa3;border-color:#ff9f5a66;background:#ff9f5a14} .chip.pink{color:#ffc2dc;border-color:#ff7eb666;background:#ff7eb614}
+.ref{font-family:var(--mono);font-size:11.5px;padding:1px 7px;border-radius:6px;background:#9b8cff22;color:#d6ceff;border:1px solid #9b8cff55}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;color:var(--muted);font-weight:650;font-size:11.5px;text-transform:uppercase;letter-spacing:.5px;padding:8px 10px;border-bottom:1px solid var(--line)}
+td{padding:8px 10px;border-bottom:1px solid #ffffff0a;vertical-align:top}
+tr.click{cursor:pointer} tr.click:hover td{background:#ffffff06}
+.bar{height:7px;border-radius:9px;background:#ffffff10;overflow:hidden;min-width:90px}
+.bar i{display:block;height:100%;border-radius:9px;background:linear-gradient(90deg,var(--purple),var(--orange))}
+.muted{color:var(--muted)} .dim{color:var(--dim)} .small{font-size:12px}
+.banner{padding:12px 16px;border-radius:12px;border:1px solid;display:flex;gap:12px;align-items:center;margin-bottom:16px}
+.banner.red{border-color:#ff6b6b66;background:#ff6b6b14} .banner.amber{border-color:#ffc85766;background:#ffc85712} .banner.green{border-color:#3ddc9766;background:#3ddc9712} .banner.blue{border-color:#64a8ff66;background:#64a8ff12}
+.empty{color:var(--dim);font-style:italic;padding:8px 0}
+input[type=text],textarea,select{width:100%;background:#0b1226;color:var(--text);border:1px solid var(--line2);border-radius:10px;padding:10px 12px;font:inherit}
+textarea{min-height:64px;resize:vertical}
+label.opt{display:flex;align-items:center;gap:8px;color:var(--muted);font-weight:600;font-size:13px;cursor:pointer}
+.seg{display:inline-flex;background:#0b1226;border:1px solid var(--line2);border-radius:11px;padding:3px;gap:3px}
+.seg button{background:none;border:0;color:var(--muted);padding:7px 12px;border-radius:8px;font-weight:650;font-size:12.5px}
+.seg button.on{background:var(--panel2);color:#fff;box-shadow:0 0 0 1px var(--line2)}
+.fault{display:flex;flex-direction:column;gap:8px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 13px}
+.fault .t{font-weight:750;font-family:var(--mono);font-size:13px}
+.fault .a{color:var(--muted);font-size:12.5px;flex:1}
+.fault .row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.faults{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.secret{background:radial-gradient(circle at 20% 10%,#9b8cff33,transparent 60%),linear-gradient(135deg,#1b1840,#151d3a);border:1px solid #9b8cff66}
+.big{font-size:26px;font-weight:800}
+.steps{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 18px}
+.steps .s{flex:1;min-width:92px;padding:9px 10px;border-radius:11px;background:var(--panel);border:1px solid var(--line);color:var(--dim);font-weight:700;font-size:12.5px;text-align:center;position:relative}
+.steps .s.done{color:#bdf5dc;border-color:#3ddc9755;background:#3ddc970f}
+.steps .s.now{color:#fff;border-color:var(--purple);background:#9b8cff1f;box-shadow:0 0 16px #9b8cff44}
+.steps .s.bad{color:#ffc0c0;border-color:#ff6b6b66;background:#ff6b6b14}
+.timeline{display:flex;flex-direction:column;gap:9px;max-height:68vh;overflow:auto;padding-right:4px}
+.ev{border:1px solid var(--line);border-left:3px solid var(--line2);background:var(--panel2);border-radius:10px;padding:9px 12px}
+.ev .top{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.ev .n{font-family:var(--mono);color:var(--dim);font-size:11.5px}
+.ev.tool{border-left-color:var(--purple)} .ev.llm{border-left-color:var(--orange);background:transparent;padding:6px 12px}
+.ev.ok{border-left-color:var(--green)} .ev.bad{border-left-color:var(--red);background:#ff6b6b0d} .ev.note{border-left-color:var(--amber);background:transparent;padding:6px 12px}
+details summary{cursor:pointer;color:var(--muted);font-size:12px;margin-top:6px}
+pre{white-space:pre-wrap;word-break:break-word;background:#070c1a;border:1px solid var(--line);border-radius:10px;padding:10px;font:12px/1.5 var(--mono);color:#cdd6ee;max-height:320px;overflow:auto;margin:6px 0 0}
+.console{max-height:260px}
+.ring{--p:0;width:92px;height:92px;border-radius:50%;background:conic-gradient(var(--c) calc(var(--p)*1%),#ffffff12 0);display:grid;place-items:center;flex:none}
+.ring b{width:72px;height:72px;border-radius:50%;background:var(--panel);display:grid;place-items:center;font-size:20px}
+.kv{display:grid;grid-template-columns:120px 1fr;gap:6px 12px;font-size:13px}
+.kv div:nth-child(odd){color:var(--muted)}
+.approve{border:1px solid #64a8ff88;background:linear-gradient(135deg,#132447,#131c33);box-shadow:0 0 30px #64a8ff33}
+.outcome{font-size:16px;font-weight:800}
+.md h1{font-size:19px}.md h2{font-size:16px;margin:16px 0 6px}.md h3{font-size:14px;margin:12px 0 4px}
+.md table{margin:8px 0}.md code{background:#ffffff12;padding:1px 5px;border-radius:5px}
+.md td,.md th{border:1px solid var(--line)}
+.overlay{position:fixed;inset:0;background:#000a;display:none;align-items:flex-start;justify-content:center;padding:40px;z-index:10;overflow:auto}
+.overlay.on{display:flex}
+.modal{background:var(--bg2);border:1px solid var(--line2);border-radius:18px;max-width:1100px;width:100%;padding:22px}
+.toast{position:fixed;right:22px;bottom:22px;background:var(--panel2);border:1px solid var(--line2);padding:12px 16px;border-radius:12px;box-shadow:0 10px 30px #0008;z-index:20;max-width:420px;display:none}
+.toast.on{display:block}
+.pass{color:var(--green);font-weight:800}.fail{color:var(--red);font-weight:800}
+.stat{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.stat .v{font-size:24px;font-weight:800}.stat .l{color:var(--muted);font-size:12px;font-weight:600}
+.spin{display:inline-block;width:12px;height:12px;border:2px solid #ffffff33;border-top-color:#fff;border-radius:50%;animation:sp 0.8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.hidden{display:none!important}
+@media(max-width:900px){
+  .app{grid-template-columns:1fr;grid-template-rows:auto auto 1fr}
+  header{flex-wrap:wrap;padding:10px 14px;gap:8px} .pills{margin-left:0;flex-wrap:wrap}
+  nav{flex-direction:row;overflow-x:auto;padding:8px;border-right:0;border-bottom:1px solid var(--line)}
+  nav button{white-space:nowrap;padding:8px 12px;font-size:13px} nav .foot{display:none}
+  main{padding:16px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo"><div class="dot"></div><div>Incident Zero <small>AI on-call engineer · control room · TEAM-33</small></div></div>
+    <div class="pills">
+      <div class="pill" id="pillStack"><span class="led" id="ledStack"></span><span id="txtStack">telemetry …</span></div>
+      <div class="pill" id="pillFault"><span class="led" id="ledFault"></span><span id="txtFault">no fault</span></div>
+      <div class="pill" id="pillRun"><span class="led" id="ledRun"></span><span id="txtRun">agent idle</span></div>
+      <button class="kill" id="killBtn" onclick="toggleKill()">⏻ KILL SWITCH</button>
+    </div>
+  </header>
+  <nav>
+    <button data-tab="overview" class="active"><span class="ico">◉</span>Live overview</button>
+    <button data-tab="inject"><span class="ico">⚡</span>Break it (faults)</button>
+    <button data-tab="investigate"><span class="ico">🔎</span>Investigate &amp; fix</button>
+    <button data-tab="evaluate"><span class="ico">✔</span>Evaluation</button>
+    <button data-tab="history"><span class="ico">🗂</span>History &amp; logs</button>
+    <div class="foot">Everything here runs the real project:<br><code>agent.py</code>, <code>faultctl.py</code>, <code>mentor.py</code>, the tests and the proof. Approve / Reject is typed into the agent's own y/N prompt.</div>
+  </nav>
+  <main>
+
+  <!-- ============================================================ OVERVIEW -->
+  <section id="tab-overview">
+    <h1>Live overview</h1>
+    <p class="sub">What the agent's own tools see right now: every service against <b>its own</b> 2-hour baseline, containers, Kafka, the database and the cache.</p>
+    <div id="pipelineWarn"></div>
+    <div class="grid g4" id="ovStats" style="margin-bottom:18px"></div>
+    <div class="grid g2">
+      <div class="card" style="grid-row:span 2">
+        <div class="head"><h2>Services ranked by deviation from their own normal</h2><div class="right"><span class="muted small" id="healthAt"></span><button class="btn sm" onclick="loadHealth(true)">↻ Refresh</button></div></div>
+        <div id="svcTable"><div class="empty">loading…</div></div>
+      </div>
+      <div class="card">
+        <div class="head"><h2>Containers with problems</h2><span class="chip gray">docker</span></div>
+        <div id="ctrList"><div class="empty">loading…</div></div>
+      </div>
+      <div class="card">
+        <div class="head"><h2>Kafka · database · cache · disk</h2><span class="chip gray">dependencies</span></div>
+        <div id="depList"><div class="empty">loading…</div></div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:18px">
+      <div class="head"><h2>Pre-flight: is every data source fresh?</h2><div class="right"><button class="btn sm" onclick="runTask('preflight','preflightOut')">Run pre-flight</button></div></div>
+      <div id="preflightOut" class="empty">Checks containers, the web store, span metrics, container metrics, Jaeger, OpenSearch, the kill switch, leftover faults and the LLM key.</div>
+    </div>
+  </section>
+
+  <!-- ============================================================ INJECT -->
+  <section id="tab-inject" class="hidden">
+    <h1>Break it</h1>
+    <p class="sub">Inject a <b>known</b> practice fault, or let the mentor simulator inject an <b>unknown</b> one you cannot see, exactly like the hidden test.</p>
+    <div id="faultBanner"></div>
+    <div class="grid g2" style="margin-bottom:18px">
+      <div class="card secret">
+        <div class="head"><h2>🎲 Unknown fault (mentor mode)</h2><span class="chip purple">blind test</span></div>
+        <p class="muted" style="margin-top:0">A random flag or docker fault on a random service (14 flags × 4 docker faults × 15 services). The answer stays sealed until you reveal it, after the agent has answered.</p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn primary" onclick="injectSecret()">Inject a secret fault</button>
+          <button class="btn" onclick="reveal()">Reveal &amp; score</button>
+        </div>
+        <div id="revealOut" style="margin-top:12px"></div>
+      </div>
+      <div class="card">
+        <div class="head"><h2>🧹 Put the shop back</h2></div>
+        <p class="muted" style="margin-top:0">Turns every flag off, starts / unpauses / reconnects containers, restores CPU and memory limits, and undoes a secret fault exactly.</p>
+        <button class="btn warn" onclick="resetAll()">Reset all faults</button>
+        <div id="resetOut" class="small muted" style="margin-top:10px"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="head"><h2>Known practice faults</h2>
+        <div class="right"><div class="seg" id="faultFilter"><button class="on" data-f="all">All</button><button data-f="application">Application</button><button data-f="infrastructure">Infrastructure</button><button data-f="combined">Combined</button></div></div></div>
+      <div class="faults" id="faultGrid"></div>
+    </div>
+  </section>
+
+  <!-- ============================================================ INVESTIGATE -->
+  <section id="tab-investigate" class="hidden">
+    <h1>Investigate &amp; fix</h1>
+    <p class="sub">The real agent, live: every tool call and result, the diagnosis and its trust checks, the reviewer, then <b>your</b> approval, the action and the verification.</p>
+    <div class="card" style="margin-bottom:16px">
+      <div class="grid" style="grid-template-columns:1fr auto;gap:14px;align-items:end">
+        <div><div class="muted small" style="margin-bottom:6px;font-weight:700">ALERT (what the on-call engineer is told)</div>
+          <textarea id="alertText">Error rate is elevated on the frontend</textarea></div>
+        <div style="display:flex;flex-direction:column;gap:10px;min-width:330px">
+          <div class="seg" id="modeSeg"><button class="on" data-m="act">Full loop + approval</button><button data-m="dry_run">Dry run</button><button data-m="no_act">Diagnose only</button></div>
+          <div style="display:flex;gap:16px"><label class="opt"><input type="checkbox" id="optReview" checked> Reviewer</label>
+          <label class="opt"><input type="checkbox" id="optHall"> Hallucination demo</label></div>
+          <div style="display:flex;gap:10px"><button class="btn primary" id="runBtn" onclick="runAgent()" style="flex:1">▶ Run the agent</button>
+          <button class="btn" id="stopBtn" onclick="stopAgent()" disabled>■ Stop</button></div>
+        </div>
+      </div>
+    </div>
+    <div class="steps" id="steps"></div>
+    <div class="grid g2" style="align-items:start">
+      <div class="card">
+        <div class="head"><h2>🔎 Investigation, live</h2><span class="chip purple" id="toolCount">0 tool calls</span><div class="right"><span class="muted small" id="runId"></span></div></div>
+        <div class="timeline" id="timeline"><div class="empty">Run the agent to watch it investigate.</div></div>
+        <details><summary>raw console output</summary><pre class="console" id="console"></pre></details>
+      </div>
+      <div class="grid" style="gap:16px">
+        <div class="card hidden approve" id="approveCard"></div>
+        <div class="card" id="diagCard"><div class="head"><h2>🧠 Diagnosis</h2></div><div class="empty">Appears when the agent submits and the trust checks accept it.</div></div>
+        <div class="card hidden" id="verifyCard"><div class="head"><h2>✅ Act &amp; verify</h2></div><div id="verifyBody"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ EVALUATE -->
+  <section id="tab-evaluate" class="hidden">
+    <h1>Evaluation</h1>
+    <p class="sub">How well does it work, and can we prove the promises? Blind-test score, the three ideas, tests, calibration, fault detection and every action ever taken.</p>
+    <div class="grid g2">
+      <div class="card"><div class="head"><h2>🎲 Blind-test scoreboard</h2><span class="chip purple">mentor mode</span></div><div id="scoreBody"></div></div>
+      <div class="card"><div class="head"><h2>🛡 The three ideas, proven</h2><div class="right"><button class="btn sm primary" onclick="runTask('proof','proofOut')">Run proof</button><button class="btn sm" onclick="runTask('tests','testsOut')">Run 29 tests</button></div></div>
+        <div id="proofOut" class="empty">18 PASS/FAIL checks on the real code: evidence guard, calibration, reviewer, approval, allowlist, kill switch, rollback. No LLM, nothing in the shop changes.</div>
+        <div id="testsOut" style="margin-top:10px"></div></div>
+      <div class="card"><div class="head"><h2>📏 Calibration: stated confidence vs reality</h2><span class="chip gray">practice sweeps</span></div><div id="calBody"></div></div>
+      <div class="card"><div class="head"><h2>📡 Fault detection matrix (tool layer, no LLM)</h2></div><div id="detBody"></div></div>
+    </div>
+    <div class="card" style="margin-top:18px"><div class="head"><h2>🧾 Action log: every attempt, refusal, dry run and approval</h2><span class="chip gray">action_log.jsonl</span></div><div id="logBody"></div></div>
+  </section>
+
+  <!-- ============================================================ HISTORY -->
+  <section id="tab-history" class="hidden">
+    <h1>History &amp; logs</h1>
+    <p class="sub">Every diagnosis the agent has written: from this UI, the demos, the mentor rounds and the sweeps. Click one to open its report.</p>
+    <div class="card"><div class="head"><h2>Past runs</h2><div class="right"><select id="histFilter" style="width:220px" onchange="renderHistory()"></select></div></div><div id="histBody"></div></div>
+  </section>
+  </main>
+</div>
+<div class="overlay" id="overlay" onclick="if(event.target===this)this.classList.remove('on')"><div class="modal" id="modal"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = v => String(v ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function api(path, body){
+  const r = await fetch(path, body === undefined ? {} : {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  const data = await r.json().catch(() => ({error: 'bad response'}));
+  if (!r.ok) throw new Error(data.error || r.statusText);
+  return data;
+}
+function toast(msg, ms=3800){ const t=$('#toast'); t.innerHTML=msg; t.classList.add('on'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('on'), ms); }
+
+// ------------------------------------------------------------------ tabs
+let tab = 'overview';
+document.querySelectorAll('nav button[data-tab]').forEach(b => b.onclick = () => show(b.dataset.tab));
+function show(name){
+  tab = name;
+  document.querySelectorAll('nav button[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('main > section').forEach(s => s.classList.toggle('hidden', s.id !== 'tab-' + name));
+  if (name === 'overview') loadHealth();
+  if (name === 'inject') loadIncidents();
+  if (name === 'evaluate') loadEvaluate();
+  if (name === 'history') loadHistory();
+}
+
+// ------------------------------------------------------------------ header state
+let G = {fault:null, kill:false};
+async function loadState(){
+  try{
+    const s = await api('/api/state');
+    G.kill = s.kill_switch; G.fault = s.fault;
+    const kb = $('#killBtn'); kb.classList.toggle('on', s.kill_switch); kb.textContent = s.kill_switch ? '⏻ KILL SWITCH ON' : '⏻ KILL SWITCH';
+    const f = s.fault; let label = 'no fault', cls = 'ok';
+    if (f.secret_active){ label = 'secret fault active'; cls = 'bad'; }
+    else if (f.known_active && f.known_active.length){ label = 'fault: ' + f.known_active.join(', '); cls = 'bad'; }
+    $('#txtFault').textContent = label; $('#ledFault').className = 'led ' + cls;
+    const running = s.jobs.some(j => j.kind === 'agent' && j.running);
+    $('#txtRun').textContent = running ? 'agent running' : 'agent idle'; $('#ledRun').className = 'led ' + (running ? 'warn' : 'ok');
+    renderFaultBanner();
+  }catch(e){ $('#txtStack').textContent = 'server unreachable'; $('#ledStack').className = 'led bad'; }
+}
+async function toggleKill(){
+  const s = await api('/api/killswitch', {on: !G.kill});
+  toast(s.kill_switch ? '<b>KILL_SWITCH created.</b> The agent stops at its next step; no action can run.' : 'KILL_SWITCH removed.');
+  loadState();
+}
+
+// ------------------------------------------------------------------ overview
+const hintClass = h => /^(ERRORS|NOT_REPORTING)/.test(h) ? 'red' : /^SLOW/.test(h) ? 'amber' : /^IDLE/.test(h) ? 'gray' :
+  /TRAFFIC_SURGE|RETRY_STORM/.test(h) ? 'blue' : /^TELEMETRY_GAP/.test(h) ? 'purple' : /^unknown/.test(h) ? 'gray' : 'green';
+async function loadHealth(force){
+  $('#healthAt').innerHTML = '<span class="spin"></span>';
+  try{
+    const h = await api('/api/health' + (force ? '?force=1' : ''));
+    $('#healthAt').textContent = 'at ' + h.at;
+    $('#txtStack').textContent = h.pipeline_warning ? 'telemetry STALE' : 'telemetry fresh';
+    $('#ledStack').className = 'led ' + (h.pipeline_warning ? 'bad' : 'ok');
+    $('#pipelineWarn').innerHTML = h.pipeline_warning ? `<div class="banner red">⚠ <div>${esc(h.pipeline_warning)}</div></div>` : '';
+    const svc = h.services || [], bad = svc.filter(s => !/^ok/.test(s.status_hint));
+    const top = svc[0];
+    $('#ovStats').innerHTML = [
+      ['Services reporting', svc.length, ''], ['Not normal right now', bad.length, bad.length ? 'color:var(--amber)' : 'color:var(--green)'],
+      ['Containers with problems', (h.containers||[]).length, (h.containers||[]).length ? 'color:var(--red)' : 'color:var(--green)'],
+      ['Most changed service', top ? top.service : '—', 'font-size:19px']
+    ].map(([l,v,st]) => `<div class="stat"><div class="v" style="${st}">${esc(v)}</div><div class="l">${l}</div></div>`).join('');
+    const max = Math.max(1, ...svc.map(s => s.deviation_score || 0));
+    $('#svcTable').innerHTML = `<table><tr><th>service</th><th>status (vs its own normal)</th><th>deviation</th><th>errors</th><th>p95</th><th>req/s</th></tr>` +
+      svc.map(s => `<tr><td class="mono"><b>${esc(s.service)}</b></td><td><span class="chip ${hintClass(s.status_hint)}" title="${esc(s.status_hint)}">${esc(s.status_hint.slice(0,46))}</span></td>
+        <td><div style="display:flex;gap:8px;align-items:center"><div class="bar" style="flex:1"><i style="width:${Math.min(100,(s.deviation_score||0)/max*100)}%"></i></div><span class="mono small">${(s.deviation_score??0).toFixed(1)}</span></div></td>
+        <td class="mono small">${((s.error_ratio||0)*100).toFixed(1)}%</td><td class="mono small">${s.p95_latency_ms ?? '—'}</td><td class="mono small">${s.requests_per_second ?? '—'}</td></tr>`).join('') + '</table>';
+    $('#ctrList').innerHTML = (h.containers||[]).length ? (h.containers).map(c => `<div style="padding:7px 0;border-bottom:1px solid #ffffff0a"><b class="mono">${esc(c.container)}</b><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:5px">${c.problems.map(p => `<span class="chip wrapchip ${/NOT_RUNNING|OOM|CRASH|RESTART|PAUSED|NETWORK/.test(p)?'red':'amber'}">${esc(p)}</span>`).join('')}</div></div>`).join('')
+      : '<div class="empty">✓ every container running normally</div>';
+    $('#depList').innerHTML = (h.dependencies||[]).length ? h.dependencies.map(p => `<div style="padding:6px 0"><span class="chip red">${esc(p.problem)}</span> <b class="mono">${esc(p.service)}</b> <span class="muted small">${esc(p.detail || '')}</span></div>`).join('')
+      : '<div class="empty">✓ Kafka consumers, PostgreSQL, the Valkey cache and the disk look normal</div>';
+  }catch(e){ $('#svcTable').innerHTML = `<div class="banner red">Could not read telemetry: ${esc(e.message)}</div>`; }
+}
+
+// ------------------------------------------------------------------ tasks (preflight / proof / tests)
+async function runTask(name, target){
+  const el = $('#' + target); el.innerHTML = '<span class="spin"></span> running…'; el.classList.remove('empty');
+  try{
+    const {job} = await api('/api/task', {name});
+    let since = 0, lines = [];
+    while (true){
+      const r = await api(`/api/job/${job}/events?since=${since}`);
+      for (const e of r.events){ since = e.seq + 1; if (e.type === 'log') lines.push(e.text); }
+      el.innerHTML = renderTask(name, lines, r.running);
+      if (!r.running && r.events.some(e => e.type === 'done')) break;
+      await new Promise(res => setTimeout(res, 600));
+    }
+  }catch(e){ el.innerHTML = `<div class="banner red">${esc(e.message)}</div>`; }
+}
+function renderTask(name, lines, running){
+  const spin = running ? '<span class="spin"></span> ' : '';
+  if (name === 'preflight'){
+    const rows = lines.filter(l => /^(PASS|FAIL|WARN)/.test(l.trim()));
+    return spin + (rows.length ? '<table>' + rows.map(l => { const m = l.trim().match(/^(\w+)\s+(.+?)\s{2,}(.*)$/) || [0, l, l, ''];
+      return `<tr><td><span class="chip ${m[1]==='PASS'?'green':m[1]==='FAIL'?'red':'amber'}">${m[1]}</span></td><td>${esc(m[2])}</td><td class="muted small">${esc(m[3])}</td></tr>`; }).join('') + '</table>' : '')
+      + lines.filter(l => /ALL GREEN|NOT READY|FAIL/.test(l) && !/^(PASS|FAIL|WARN)\s/.test(l.trim())).map(l => `<div style="margin-top:8px;font-weight:800">${esc(l)}</div>`).join('');
+  }
+  if (name === 'proof'){
+    const out = []; let i = 0;
+    for (; i < lines.length; i++){
+      const l = lines[i];
+      if (/^IDEA \d/.test(l.trim())) out.push(`<div style="margin:12px 0 4px;font-weight:800;color:var(--purple)">${esc(l.trim())}</div>`);
+      else if (/^\s*(PASS|FAIL)\s/.test(l)){ const ok = /PASS/.test(l); const tried = (lines[i+1]||'').replace(/^\s*tried\s*:\s*/,''); const res = (lines[i+2]||'').replace(/^\s*result\s*:\s*/,'');
+        out.push(`<div style="padding:6px 0;border-bottom:1px solid #ffffff0a"><span class="${ok?'pass':'fail'}">${ok?'✔ PASS':'✘ FAIL'}</span> ${esc(l.replace(/^\s*(PASS|FAIL)\s+/,''))}<div class="small muted" style="margin-left:62px">tried: ${esc(tried)}<br>result: ${esc(res)}</div></div>`); i += 2; }
+      else if (/checks passed/.test(l)) out.push(`<div class="banner ${/(\d+) of \1/.test(l)?'green':'red'}" style="margin-top:12px"><b>${esc(l.trim())}</b></div>`);
+    }
+    return spin + out.join('');
+  }
+  if (name === 'tests'){
+    const ok = lines.filter(l => /^ok /.test(l)).length, bad = lines.filter(l => !/^ok /.test(l) && /Traceback|Error\b|AssertionError/.test(l));
+    return spin + `<div class="banner ${bad.length?'red':'green'}" style="margin:0"><b>${ok} offline tests passed</b>${bad.length ? ' · problems:<pre>'+esc(bad.join('\n'))+'</pre>' : ' · no stack, no LLM'}</div>`;
+  }
+  return spin + '<pre>' + esc(lines.join('\n')) + '</pre>';
+}
+
+// ------------------------------------------------------------------ faults
+let INC = [], filter = 'all';
+document.querySelectorAll('#faultFilter button').forEach(b => b.onclick = () => { filter = b.dataset.f; document.querySelectorAll('#faultFilter button').forEach(x => x.classList.toggle('on', x === b)); renderFaults(); });
+async function loadIncidents(){ if (!INC.length) INC = await api('/api/incidents'); renderFaults(); renderFaultBanner(); }
+function renderFaults(){
+  const color = {application:'pink', infrastructure:'teal', combined:'amber'};
+  $('#faultGrid').innerHTML = INC.filter(i => filter === 'all' || i.category === filter).map(i => `
+    <div class="fault"><div class="row"><span class="t">${esc(i.name)}</span></div>
+      <div class="row"><span class="chip ${color[i.category]}">${i.category}</span><span class="chip gray">${esc(i.kind)}</span>${i.priority?`<span class="chip blue">${esc(i.priority)}</span>`:''}</div>
+      <div class="a">“${esc(i.alert)}”</div>
+      <div class="row small dim mono">${esc(i.detail)} · expect <b>${esc(i.expected)}</b></div>
+      <button class="btn sm danger" onclick="injectKnown('${esc(i.name)}')">⚡ Inject</button></div>`).join('');
+}
+function renderFaultBanner(){
+  const f = G.fault && G.fault.ui; const el = $('#faultBanner'); if (!el) return;
+  if (!f){ el.innerHTML = G.fault && (G.fault.known_active||[]).length ? `<div class="banner amber">⚡ Active practice fault: <b class="mono">${esc(G.fault.known_active.join(', '))}</b></div>` : ''; return; }
+  const age = Math.round(Date.now()/1000 - f.injected_at), ready = age >= 120;
+  el.innerHTML = `<div class="banner ${ready?'green':'amber'}">${ready?'✅':'⏳'} <div style="flex:1"><b>${f.secret?'A secret fault':'Fault <span class="mono">'+esc(f.label)+'</span>'}</b> injected ${age}s ago.
+    ${ready ? 'Metrics have caught up: investigate now.' : `Prometheus needs about 2 minutes to see it: ready in <b>${120-age}s</b>.`}</div>
+    <button class="btn ${ready?'go':''}" onclick="goInvestigate()">Investigate →</button></div>`;
+}
+function goInvestigate(){ const f = G.fault && G.fault.ui; if (f && f.alert) $('#alertText').value = f.alert; show('investigate'); }
+async function injectKnown(name){
+  toast('<span class="spin"></span> injecting <b>' + esc(name) + '</b>…', 20000);
+  try{ const r = await api('/api/fault/inject', {name}); toast(r.ok ? `⚡ <b>${esc(name)}</b> injected. Wait ~2 min, then investigate.` : '<b>Failed:</b> ' + esc(r.output)); }
+  catch(e){ toast('Failed: ' + esc(e.message)); } loadState();
+}
+async function injectSecret(){
+  toast('<span class="spin"></span> the mentor is choosing a fault…', 30000);
+  try{ const r = await api('/api/fault/secret', {}); toast(r.ok ? '🎲 <b>A secret fault is injected.</b> You do not know which one. Wait ~2 min, then investigate.' : '<b>Failed:</b> ' + esc(r.output));
+    $('#revealOut').innerHTML = ''; }
+  catch(e){ toast('Failed: ' + esc(e.message)); } loadState();
+}
+async function reveal(){
+  try{
+    const r = await api('/api/fault/reveal', {});
+    const v = r.verdict || 'NO RUN YET', cls = v === 'CORRECT' ? 'green' : v === 'ESCALATED' ? 'amber' : v === 'NO RUN YET' ? 'blue' : 'red';
+    $('#revealOut').innerHTML = `<div class="banner ${cls}" style="flex-direction:column;align-items:flex-start;gap:6px">
+      <div><span class="muted">The mentor broke:</span> <b class="mono">${esc(r.how)}</b> · right answers: ${r.accept.map(a=>`<span class="chip green">${esc(a)}</span>`).join(' ')}</div>
+      ${r.diagnosis ? `<div><span class="muted">The agent said:</span> <b class="mono">${esc(r.diagnosis.service)}</b> (${esc(r.diagnosis.status)}, ${esc(r.diagnosis.label)} ${r.diagnosis.confidence})</div>
+      <div class="big" style="color:var(--${cls === 'green' ? 'green' : cls === 'amber' ? 'amber' : 'red'})">${esc(v)}</div>` : '<div>Run the agent first (Investigate tab), then reveal.</div>'}
+      <button class="btn sm warn" onclick="resetAll()">Undo the fault</button></div>`;
+  }catch(e){ $('#revealOut').innerHTML = `<div class="banner red">${esc(e.message)}</div>`; }
+}
+async function resetAll(){
+  $('#resetOut').innerHTML = '<span class="spin"></span> resetting…';
+  try{ const r = await api('/api/fault/reset', {}); $('#resetOut').textContent = r.output; toast('🧹 Shop reset. Give it ~2 minutes before the next fault.'); }
+  catch(e){ $('#resetOut').textContent = e.message; } loadState();
+}
+
+// ------------------------------------------------------------------ investigate: the live agent run
+let mode = 'act';
+document.querySelectorAll('#modeSeg button').forEach(b => b.onclick = () => { mode = b.dataset.m; document.querySelectorAll('#modeSeg button').forEach(x => x.classList.toggle('on', x === b)); });
+const STEPS = ['Investigate', 'Trust checks', 'Reviewer', 'Dry run', 'Your approval', 'Act', 'Verify', 'Done'];
+let R = null;  // the current run
+function setStep(name, bad){ if (!R) return; const i = STEPS.indexOf(name); if (i >= R.stepIdx || bad){ R.stepIdx = Math.max(R.stepIdx, i); R.stepBad = !!bad; } renderSteps(); }
+function renderSteps(){
+  $('#steps').innerHTML = STEPS.map((s, i) => { const cls = !R ? '' : i < R.stepIdx || (R.finished && i === R.stepIdx && !R.stepBad) ? 'done' : i === R.stepIdx ? (R.stepBad ? 'bad' : 'now') : '';
+    return `<div class="s ${cls}">${i+1}. ${s}</div>`; }).join('');
+}
+renderSteps();
+async function runAgent(){
+  const body = {alert: $('#alertText').value.trim(), mode, review: $('#optReview').checked, hallucination: $('#optHall').checked};
+  try{
+    const r = await api('/api/agent/run', body);
+    R = {job: r.job, id: r.incident_id, since: 0, tools: 0, stepIdx: 0, stepBad: false, finished: false, dry: [], verify: [], prompt: null, diagnosis: null};
+    $('#timeline').innerHTML = ''; $('#console').textContent = ''; $('#runId').textContent = r.incident_id;
+    $('#diagCard').innerHTML = '<div class="head"><h2>🧠 Diagnosis</h2></div><div class="empty"><span class="spin"></span> investigating…</div>';
+    $('#approveCard').classList.add('hidden'); $('#verifyCard').classList.add('hidden'); $('#verifyBody').innerHTML = '';
+    $('#runBtn').disabled = true; $('#stopBtn').disabled = false; renderSteps(); poll();
+  }catch(e){ toast('Could not start: ' + esc(e.message)); }
+}
+async function stopAgent(){ if (R) await api('/api/job/stop', {job: R.job}); }
+async function poll(){
+  if (!R) return;
+  try{
+    const r = await api(`/api/job/${R.job}/events?since=${R.since}`);
+    for (const e of r.events){ R.since = e.seq + 1; handle(e); }
+    if (r.running || !R.finished) setTimeout(poll, 700);
+  }catch(e){ setTimeout(poll, 1500); }
+}
+function addEv(html, cls){ const d = document.createElement('div'); d.className = 'ev ' + cls; d.innerHTML = html; const t = $('#timeline'); t.appendChild(d); t.scrollTop = t.scrollHeight; }
+function handle(e){
+  if (e.type === 'log'){
+    const c = $('#console'); c.textContent += e.text + '\n'; c.scrollTop = c.scrollHeight;
+    const l = e.text.trim();
+    if (/^pacing:/.test(l)) addEv(`⏳ <span class="muted">${esc(l)}</span> <span class="dim small">(staying under 8,000 tokens/min)</span>`, 'note');
+    else if (/DAILY-CAPPED|cool-down over/.test(l)) addEv(`🔀 <b>${esc(l)}</b>`, 'note');
+    else if (/LLM call failed/.test(l)) addEv(`↻ <span class="muted">${esc(l)}</span>`, 'note');
+    else if (/^\[demo\] planted/.test(l)) addEv(`🧪 <b style="color:var(--red)">Hallucination demo:</b> a fake reference <span class="ref">trace-9999</span> was planted in the model's answer. Watch the guard.`, 'bad');
+    else if (/KILL_SWITCH present/.test(l)) addEv(`⏻ <b style="color:var(--red)">${esc(l)}</b>`, 'bad');
+    if (/^--- DIAGNOSIS ---/.test(l)) setStep('Dry run');
+    if (R.collect === 'dry' && /^(action|reason|would|undo)\s*:/.test(l)) R.dry.push(l);
+    if (/^--- PROPOSED ACTION/.test(l)) { R.collect = 'dry'; R.dry = []; }
+    if (/^acting\s*:/.test(l)) { setStep('Act'); verifyLine('▶ ' + l, 'blue'); }
+    if (/waiting \d+s for fresh metrics|verification check/.test(l)) { setStep('Verify'); verifyLine(l, 'muted'); }
+    if (/^rolling back/.test(l)) verifyLine('↩ ' + l, 'amber');
+    if (/^OUTCOME:/.test(l)) outcome(l.replace(/^OUTCOME:\s*/, ''));
+  }
+  else if (e.type === 'step') step(e);
+  else if (e.type === 'prompt') prompt(e);
+  else if (e.type === 'answer'){ $('#approveCard').classList.add('hidden'); addEv(`🧑 You answered <b>${esc(e.text)}</b>`, 'ok'); }
+  else if (e.type === 'done') done(e);
+}
+function step(e){
+  if (e.step === 'tool'){
+    R.tools++; $('#toolCount').textContent = R.tools + ' tool calls'; setStep('Investigate');
+    let pretty = e.result; try { pretty = JSON.stringify(JSON.parse(e.result), null, 1); } catch(_){}
+    addEv(`<div class="top"><span class="n">#${e.iteration}</span><b class="mono" style="color:var(--purple)">${esc(e.tool)}</b><span class="mono small muted">${esc(JSON.stringify(e.arguments||{}))}</span></div>
+      ${e.refs && e.refs.length ? `<div style="margin-top:6px;display:flex;gap:5px;flex-wrap:wrap">${e.refs.slice(0,14).map(r=>`<span class="ref">${esc(r)}</span>`).join('')}${e.refs.length>14?`<span class="dim small">+${e.refs.length-14}</span>`:''}</div>` : ''}
+      <details><summary>tool result${e.truncated?' (first 6,000 chars)':''}</summary><pre>${esc(pretty)}</pre></details>`, 'tool');
+  } else if (e.step === 'llm'){
+    addEv(`<span class="muted small">🧠 model <b class="mono">${esc(e.model||'')}</b> · ${e.tokens ?? '?'} tokens → ${e.tool_calls && e.tool_calls.length ? 'calls <b class="mono">' + esc(e.tool_calls.join(', ')) + '</b>' : 'no tool call'}</span>${e.text ? `<div class="small dim">${esc(e.text)}</div>` : ''}`, 'llm');
+  } else if (e.step === 'submit'){
+    setStep('Trust checks', !e.accepted);
+    addEv(e.accepted ? `<b style="color:var(--green)">✔ submit_diagnosis accepted by the trust checks</b> · ${esc(e.status)} · <b class="mono">${esc(e.root)}</b> · model said ${e.confidence}<div style="margin-top:5px">${(e.refs||[]).map(r=>`<span class="ref">${esc(r)}</span>`).join(' ')}</div>`
+      : `<b style="color:var(--red)">✘ submit_diagnosis REJECTED by the trust checks</b> (model wanted <span class="mono">${esc(e.root)}</span>)<div class="small" style="margin-top:4px">${esc(e.reason)}</div><div class="small dim">→ the model must resubmit</div>`, e.accepted ? 'ok' : 'bad');
+    if (e.accepted) setStep('Reviewer');
+  } else if (e.step === 'tool_call_rejected'){
+    addEv(`<b style="color:var(--red)">✘ The API rejected a malformed tool call</b> <div class="small">${esc((e.error||'').slice(0,220))}</div><div class="small dim">→ fed back to the model with the list of real tools; the run continues</div>`, 'bad');
+  } else if (e.step === 'review'){
+    const rv = e.review || {}; addEv(`⚖ <b>Reviewer</b> (a 2nd model call trying to disprove it): <span class="chip ${rv.disputed?'amber':'green'}">${rv.disputed?'DISPUTED':'CONFIRMED'}</span>${rv.disputed?` <span class="chip ${rv.grounded?'red':'gray'}">${rv.grounded?'grounded → confidence capped at 0.60':'speculative → recorded only'}</span>`:''}<div class="small muted" style="margin-top:4px">${esc(rv.verdict||'')}</div>`, rv.disputed ? 'note' : 'ok');
+  } else if (e.step === 'diagnosis'){
+    R.diagnosis = e.diagnosis; renderDiagnosis(e.diagnosis);
+    if (mode === 'no_act' || e.diagnosis.status !== 'diagnosed') setStep('Done');
+    else setStep('Dry run');
+  } else if (e.step === 'kill_switch'){
+    addEv('⏻ <b style="color:var(--red)">KILL_SWITCH: investigation stopped</b>', 'bad');
+  } else if (e.step === 'action_loop' && e.loop){
+    if (e.loop.outcome) outcome(e.loop.outcome);
+  }
+}
+function evidenceLine(ev){
+  if (ev.kind === 'metric') return `${esc(ev.metric)} = <b>${esc(typeof ev.value === 'number' ? +ev.value.toFixed(4) : ev.value)}</b>${ev.baseline !== undefined && ev.baseline !== null ? ` <span class="dim">(usual ${esc(typeof ev.baseline === 'number' ? +ev.baseline.toFixed(4) : ev.baseline)})</span>` : ''}`;
+  if (ev.kind === 'trace') return `span <b class="mono">${esc(ev.span_name)}</b> ${esc(ev.status||'')} ${ev.exception ? '· ' + esc(String(ev.exception).slice(0,140)) : ''} <span class="dim">${ev.duration_ms ? ev.duration_ms + ' ms' : ''}</span>`;
+  if (ev.kind === 'log') return `<span class="chip ${/err/i.test(ev.severity)?'red':'amber'}">${esc(ev.severity)}</span> ${esc(String(ev.message||'').slice(0,180))}`;
+  return esc(JSON.stringify(ev).slice(0, 180));
+}
+function renderDiagnosis(d, target){
+  const el = target || $('#diagCard');
+  const c = d.confidence || 0, col = d.confidence_label === 'high' ? 'var(--green)' : d.confidence_label === 'medium' ? 'var(--amber)' : 'var(--red)';
+  const notes = (d.investigation && d.investigation.calibration_notes) || [], rv = d.review;
+  const pa = d.proposed_action || {};
+  el.innerHTML = `<div class="head"><h2>🧠 Diagnosis</h2><span class="chip ${d.status==='diagnosed'?'green':'amber'}">${esc(d.status)}</span><div class="right"><span class="chip gray mono">${esc(d.root_cause.fault_type)}</span></div></div>
+    <div style="display:flex;gap:18px;align-items:center">
+      <div class="ring" style="--p:${Math.round(c*100)};--c:${col}"><b>${Math.round(c*100)}%</b></div>
+      <div><div class="muted small" style="font-weight:700">ROOT CAUSE</div><div class="big mono">${esc(d.root_cause.service || '—')}</div>
+      <div><span class="chip" style="color:${col};border-color:${col}">${esc(d.confidence_label)} confidence</span> ${(d.symptom_services||[]).length ? '<span class="small muted">symptoms: ' + esc(d.symptom_services.join(', ')) + '</span>' : ''}</div></div>
+    </div>
+    <p style="margin:12px 0">${esc(d.root_cause.summary)}</p>
+    ${notes.length ? `<div class="banner amber" style="flex-direction:column;align-items:flex-start;gap:4px;margin:0 0 10px"><b class="small">HOW THE CODE SET THIS CONFIDENCE</b>${notes.map(n=>`<div class="small">• ${esc(n)}</div>`).join('')}</div>` : `<div class="small muted" style="margin-bottom:10px">✓ the trust checks kept the model's confidence: enough independent evidence</div>`}
+    ${rv ? `<div class="banner ${rv.disputed ? (rv.grounded ? 'red':'amber') : 'green'}" style="flex-direction:column;align-items:flex-start;gap:4px;margin:0 0 10px"><b class="small">REVIEWER (tries to disprove it): ${rv.disputed?'DISPUTED':'CONFIRMED'}${rv.disputed?(rv.grounded?' · grounded, applied':' · speculative, not applied'):''}</b><div class="small">${esc(rv.verdict)}</div></div>` : ''}
+    <div class="muted small" style="font-weight:700;margin:6px 0">EVIDENCE (every ref was returned by a tool)</div>
+    ${(d.evidence||[]).map(ev => `<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid #ffffff08"><span class="ref" style="flex:none">${esc(ev.reference)}</span><span class="chip ${ev.kind==='metric'?'teal':ev.kind==='trace'?'purple':'orange'}" style="flex:none">${esc(ev.kind)}</span><b class="mono small" style="flex:none">${esc(ev.service||'')}</b><span class="small">${evidenceLine(ev)}${ev.why_it_matters?`<div class="dim small">${esc(ev.why_it_matters)}</div>`:''}</span></div>`).join('') || '<div class="empty">none</div>'}
+    ${(d.additional_findings||[]).length ? `<div class="banner blue" style="margin-top:10px">➕ Second independent problem: ${d.additional_findings.map(f=>`<b class="mono">${esc(f.service)}</b>: ${esc(f.finding)}`).join('; ')}</div>` : ''}
+    <div class="kv" style="margin-top:12px"><div>proposed action</div><div><b class="mono">${esc(pa.action)}</b> on <b class="mono">${esc(pa.target || '—')}</b> ${pa.parameters && Object.keys(pa.parameters).length ? '<span class="mono small">'+esc(JSON.stringify(pa.parameters))+'</span>' : ''}</div>
+    <div>reason</div><div>${esc(pa.reason)}</div>${d.prevention?`<div>prevention</div><div>${esc(d.prevention)}</div>`:''}
+    <div>investigation</div><div class="small">${d.investigation ? `${d.investigation.tool_calls} tool calls · ${d.investigation.duration_seconds}s · model ${esc(d.investigation.model)}` : ''}</div></div>`;
+}
+function prompt(e){
+  const card = $('#approveCard'); card.classList.remove('hidden');
+  if (e.prompt === 'approve'){
+    setStep('Your approval');
+    const pa = (R.diagnosis && R.diagnosis.proposed_action) || {};
+    card.innerHTML = `<div class="head"><h2>🧑‍⚖️ Your approval is needed</h2><span class="chip blue">GATE · human</span></div>
+      <div class="muted small" style="font-weight:700">DRY RUN: nothing has changed yet</div>
+      <pre style="max-height:none">${esc(R.dry.join('\n') || ('action : ' + pa.action + ' on ' + pa.target))}</pre>
+      <p class="small muted">Approving types <b>y</b> into the agent's own prompt. The allowlist and the kill switch are still checked before it acts, and the result is verified against the numbers captured before acting.</p>
+      <div style="display:flex;gap:10px"><button class="btn go" style="flex:1" onclick="answer('y')">✔ Approve (y)</button><button class="btn danger" style="flex:1" onclick="answer('n')">✘ Reject (n)</button></div>`;
+  } else {
+    card.innerHTML = `<div class="head"><h2>🏳 Which flag should be set?</h2><span class="chip pink">human names it</span></div>
+      <p class="small">${esc(e.text)}</p><p class="small muted">The agent never reads flag configuration, so it cannot know the flag's name. Leave blank to cancel.</p>
+      <div style="display:flex;gap:10px"><input type="text" id="flagName" placeholder="e.g. paymentFailure"><button class="btn primary" onclick="answer($('#flagName').value.trim())">Send</button></div>`;
+  }
+  card.scrollIntoView({behavior:'smooth', block:'center'});
+}
+async function answer(text){ await api('/api/agent/answer', {job: R.job, text}); if (text === 'y') setStep('Act'); }
+function verifyLine(text, cls){ $('#verifyCard').classList.remove('hidden'); $('#verifyBody').innerHTML += `<div class="small ${cls === 'muted' ? 'muted' : ''}" style="padding:4px 0;${cls==='blue'?'color:var(--blue);font-weight:700':cls==='amber'?'color:var(--amber);font-weight:700':''}">${esc(text)}</div>`; }
+function outcome(text){
+  if (R.outcomeShown) return; R.outcomeShown = true;
+  const good = /^recovered and verified/.test(text), bad = /rolled back|failed|not confirmed/.test(text), neutral = /dry run|rejected|escalated|halted/.test(text);
+  $('#verifyCard').classList.remove('hidden');
+  $('#verifyBody').innerHTML += `<div class="banner ${good?'green':bad?'red':'amber'}" style="margin:10px 0 0"><div class="outcome">${good?'✅':bad?'↩':'ℹ'} ${esc(text)}</div></div>`;
+  setStep('Done', bad);
+}
+function done(e){
+  R.finished = true; $('#runBtn').disabled = false; $('#stopBtn').disabled = true;
+  if (e.diagnosis){ R.diagnosis = e.diagnosis; renderDiagnosis(e.diagnosis); if (e.diagnosis.action_loop && e.diagnosis.action_loop.outcome) outcome(e.diagnosis.action_loop.outcome); }
+  else if (!R.diagnosis) $('#diagCard').innerHTML = `<div class="head"><h2>🧠 Diagnosis</h2></div><div class="banner red">The run ended without a diagnosis (exit code ${e.returncode}). See the raw console output.</div>`;
+  $('#approveCard').classList.add('hidden');
+  if (R.stepIdx < STEPS.length - 1 && !R.stepBad) setStep('Done');
+  renderSteps(); addEv(`🏁 <b>Run finished</b> · exit code ${e.returncode} · files in <span class="mono">reports/ui/${esc(R.id)}/</span>`, e.returncode === 0 ? 'ok' : 'bad');
+  loadState();
+}
+
+// ------------------------------------------------------------------ evaluation
+async function loadEvaluate(){
+  const [sc, cal, det, log] = await Promise.all([api('/api/scores'), api('/api/calibration'), api('/api/detection'), api('/api/actionlog')]);
+  const tally = v => sc.filter(s => s.verdict === v).length;
+  $('#scoreBody').innerHTML = `<div class="grid g4" style="gap:10px;margin-bottom:12px">${[['Rounds', sc.length, ''], ['Correct', tally('CORRECT'), 'var(--green)'], ['Escalated', tally('ESCALATED'), 'var(--amber)'], ['Wrong', tally('WRONG') + tally('CONFIDENTLY WRONG'), 'var(--red)']].map(([l,v,c]) => `<div class="stat"><div class="v" style="color:${c||'inherit'}">${v}</div><div class="l">${l}</div></div>`).join('')}</div>` +
+    (sc.length ? `<table><tr><th>when</th><th>the mentor broke</th><th>agent said</th><th>verdict</th></tr>${sc.map(s => `<tr><td class="small muted">${esc(s.at)}</td><td class="mono small">${esc(s.how)}</td><td class="mono small">${esc(s.said)} <span class="dim">${s.confidence ?? ''}</span></td><td><span class="chip ${s.verdict==='CORRECT'?'green':s.verdict==='ESCALATED'?'amber':'red'}">${esc(s.verdict)}</span></td></tr>`).join('')}</table>`
+    : '<div class="empty">No rounds yet: Break it → Inject a secret fault → Investigate → Reveal &amp; score.</div>');
+  $('#calBody').innerHTML = `<table><tr><th>stated</th><th>runs</th><th>correct</th><th>escalated</th><th>wrong</th><th>actual accuracy</th></tr>${cal.bands.map(b => `<tr><td><b>${b.band}</b> <span class="dim small">${b.range}</span></td><td>${b.runs}</td><td style="color:var(--green)">${b.correct}</td><td style="color:var(--amber)">${b.escalated}</td><td style="color:var(--red)">${b.wrong}</td><td>${b.accuracy === null ? '<span class="dim">none claimed</span>' : `<div style="display:flex;gap:8px;align-items:center"><div class="bar" style="flex:1"><i style="width:${b.accuracy}%"></i></div><b>${b.accuracy}%</b></div>`}</td></tr>`).join('')}</table>
+    <div class="banner ${cal.confidently_wrong ? 'amber' : 'green'}" style="margin-top:12px">Confidently wrong (high and wrong): <b>${cal.confidently_wrong}</b> across ${cal.rows.length} practice runs in ${cal.sweeps.length} sweeps</div>
+    <details><summary>every scored run</summary><table>${cal.rows.map(r => `<tr><td class="small dim">${esc(r.sweep.slice(-13))}</td><td class="mono small">${esc(r.incident)}</td><td class="mono small">${esc(r.said)}</td><td>${r.confidence}</td><td>${r.correct ? '<span class="chip green">correct</span>' : r.escalated ? '<span class="chip amber">escalated</span>' : '<span class="chip red">wrong</span>'}</td></tr>`).join('')}</table></details>`;
+  const ok = det.rows.filter(r => r.detected).length;
+  $('#detBody').innerHTML = `<div class="banner ${ok === det.rows.length ? 'green' : 'amber'}" style="margin-top:0"><b>${ok} of ${det.rows.length}</b> injectable faults detected by the tools (latest result per fault)</div>` +
+    `<table><tr><th>fault</th><th>class</th><th></th><th>what the tools reported</th></tr>${det.rows.map(r => `<tr><td class="mono small">${esc(r.incident)}</td><td class="small muted">${esc(r.class)}</td><td>${r.detected ? '✅' : '❌'}</td><td class="small">${esc(r.seen.slice(0,150))}</td></tr>`).join('')}</table>`;
+  $('#logBody').innerHTML = log.length ? `<table><tr><th>time (UTC)</th><th>run</th><th>what</th><th>action</th><th>target</th><th>approved</th><th>result</th></tr>${log.map(a => `<tr><td class="small muted">${esc((a.time||'').replace('T',' ').replace('Z',''))}</td><td class="mono small">${esc(a.incident)}</td><td><span class="chip ${a.purpose==='remedy'?'green':a.purpose==='rollback'?'amber':'gray'}">${esc(a.purpose)}</span></td><td class="mono small">${esc(a.action)}</td><td class="mono small">${esc(a.target)} ${a.parameters && Object.keys(a.parameters).length ? '<span class="dim">' + esc(JSON.stringify(a.parameters)) + '</span>' : ''}</td><td>${a.approved ? `<span class="chip green">yes · ${esc(a.approved_by||'')}</span>` : '<span class="chip gray">no</span>'}</td><td class="small">${a.ok ? '✅' : a.ok === false ? '✘ ' + esc(a.reason || '') : '—'}</td></tr>`).join('')}</table>` : '<div class="empty">No actions yet.</div>';
+}
+
+// ------------------------------------------------------------------ history
+let RUNS = [];
+async function loadHistory(){
+  RUNS = await api('/api/runs');
+  const folders = [...new Set(RUNS.map(r => r.folder))];
+  $('#histFilter').innerHTML = '<option value="">all sources</option>' + folders.map(f => `<option>${esc(f)}</option>`).join('');
+  renderHistory();
+}
+function renderHistory(){
+  const f = $('#histFilter').value, rows = RUNS.filter(r => !f || r.folder === f);
+  $('#histBody').innerHTML = rows.length ? `<table><tr><th>when</th><th>source</th><th>incident</th><th>status</th><th>root cause</th><th>confidence</th><th>action outcome</th></tr>${rows.map((r, i) => `<tr class="click" onclick="openRun('${esc(r.path)}')"><td class="small muted">${esc(r.time)}</td><td class="small">${esc(r.folder)}</td><td class="mono small">${esc(r.incident)}</td><td><span class="chip ${r.status==='diagnosed'?'green':'amber'}">${esc(r.status)}</span></td><td class="mono"><b>${esc(r.service || '—')}</b></td><td><span class="chip ${r.label==='high'?'green':r.label==='medium'?'amber':'red'}">${esc(r.label)} ${r.confidence}</span></td><td class="small muted">${esc((r.outcome||'').slice(0,70))}</td></tr>`).join('')}</table>` : '<div class="empty">No runs yet.</div>';
+}
+async function openRun(path){
+  const r = await api('/api/run?path=' + encodeURIComponent(path));
+  $('#modal').innerHTML = `<div class="head" style="display:flex;align-items:center;margin-bottom:12px"><h2 class="mono">${esc(path)}</h2><button class="btn sm" style="margin-left:auto" onclick="$('#overlay').classList.remove('on')">✕ Close</button></div>
+    <div class="grid g2" style="align-items:start"><div class="card" id="modalDiag"></div><div class="card md">${md(r.report)}</div></div>`;
+  renderDiagnosis(r.diagnosis, $('#modalDiag')); $('#overlay').classList.add('on');
+}
+function md(src){
+  const lines = (src || '').split('\n'), out = []; let i = 0;
+  const inline = s => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/\*([^*]+)\*/g, '<i>$1</i>');
+  while (i < lines.length){
+    const l = lines[i];
+    if (/^```/.test(l)){ const buf = []; i++; while (i < lines.length && !/^```/.test(lines[i])) buf.push(lines[i++]); out.push('<pre>' + esc(buf.join('\n')) + '</pre>'); i++; continue; }
+    if (/^\|/.test(l)){ const rows = []; while (i < lines.length && /^\|/.test(lines[i])) rows.push(lines[i++]);
+      out.push('<table>' + rows.filter(r => !/^\|[\s:|-]+\|$/.test(r)).map((r, k) => '<tr>' + r.replace(/^\||\|$/g, '').split('|').map(c => k === 0 ? `<th>${inline(c.trim())}</th>` : `<td>${inline(c.trim())}</td>`).join('') + '</tr>').join('') + '</table>'); continue; }
+    const h = l.match(/^(#{1,3})\s+(.*)/); if (h){ out.push(`<h${h[1].length}>${inline(h[2])}</h${h[1].length}>`); i++; continue; }
+    if (/^\s*[-*]\s+/.test(l)){ const items = []; while (i < lines.length && /^\s*[-*]\s+/.test(lines[i])) items.push('<li>' + inline(lines[i++].replace(/^\s*[-*]\s+/, '')) + '</li>'); out.push('<ul>' + items.join('') + '</ul>'); continue; }
+    if (l.trim()) out.push('<p>' + inline(l) + '</p>');
+    i++;
+  }
+  return out.join('');
+}
+
+// ------------------------------------------------------------------ start
+loadState(); loadHealth(); setInterval(loadState, 4000);
+setInterval(() => { if (tab === 'overview') loadHealth(); }, 20000);
+setInterval(renderFaultBanner, 1000);
+api('/api/incidents').then(x => INC = x);
+</script>
+</body>
+</html>

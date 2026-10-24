@@ -77,6 +77,24 @@ Every action attempt, including refusals and dry runs, is appended to `action_lo
 | `python report.py runs/<id>/diagnosis.json` | Validate against `schema.json` and print the readable report |
 | Harness | `from agent import diagnose, handle_incident`: `diagnose(alert)` returns the dict and never acts |
 
+## The control room (web UI)
+
+```bash
+./run_ui.sh          # opens http://localhost:8765
+```
+
+A local web UI over the **real** project. It re-implements nothing: it runs `agent.py`, `faultctl.py`, `mentor.py`, the tests and the proof as subprocesses, and streams what they print. It needs only the Python standard library and listens on 127.0.0.1 only.
+
+| Tab | What you can do |
+|---|---|
+| **Live overview** | Every service ranked by deviation from its own baseline; containers, Kafka, database and cache problems; the pre-flight check |
+| **Break it** | Inject any of the known practice faults, or a **secret** fault (mentor mode: random flag or docker fault on a random service). The page counts down the 2 minutes Prometheus needs, then you reveal and score the result, and reset. |
+| **Investigate & fix** | Runs the agent live: every tool call and its evidence refs, pacing, rejected tool calls, the hallucination guard firing, the diagnosis with *how the code set its confidence*, the reviewer, then the **dry run and Approve / Reject**, the action and the verification |
+| **Evaluation** | Blind-test scoreboard, the three-ideas proof (18 checks) and the 29 tests, run from the page; the calibration table; the fault-detection matrix; the full action log |
+| **History & logs** | Every diagnosis ever written (UI, demos, mentor rounds, sweeps), each opening its report |
+
+**Approve / Reject is typed into `agent.py`'s own `y/N` prompt**, so the UI passes through exactly the same four gates as the terminal. The approver is logged as `<user> (control room)`. The KILL_SWITCH button in the header creates or removes the same `KILL_SWITCH` file. A blind test scores the **first** answer after the injection.
+
 ## How the approval gate works (GATE 2)
 
 1. The agent only proposes a change when the diagnosis is `diagnosed` with confidence of at least 0.5. Otherwise it escalates with no action.
@@ -167,6 +185,7 @@ If recovery isn't confirmed, the inverse action runs (for example, restoring the
 | `check_stack.py`, `calibration.py`, `run_all.py`, `demo.sh`, `run_day1.sh` | Operator tooling (the agent never calls these) |
 | `practice/` | Stand-in faultctl and the practice incidents. Expected answers are read **only** by the scorers. |
 | `tests/test_offline.py` | 20 tests: evidence guard, calibration, stale evidence, deepest span, flag redaction, baselines, DOWN vs IDLE, the infrastructure consistency check, grounded reviewer disputes, API-rejected tool calls, and every action-loop path (approve, reject, dry run, kill switch, low confidence, recovery, rollback, hallucination demo) |
+| `ui_server.py`, `ui/index.html`, `run_ui.sh` | The control room: local web UI over the real project |
 | `docs/` | `architecture.png` (one page), `architecture-detailed.png` (data-flow map), `flow.png`, `TEAM_SPLIT.md`, `mentor-walkthrough.md`, `demo-script-day2.md`, `DAY1_REPORT.md`, `kickoff-and-mentor-questions.md` |
 | `reports/` | Every sweep (scoring table, `verdict.json`, transcripts) and the checkpoint runs |
 | `evaluation-note.md` | What it got right and wrong, before and after the fixes, plus the calibration table |
